@@ -6,7 +6,8 @@ Automated EPL TOTW system. Fetches match data from API-Football, scrapes the PL 
 
 - **From email**: 24hrnts@gmail.com
 - **To email**: 20gabramos04@gmail.com
-- **API-Football**: League ID `39`, season `2025` (for 2025-26 season)
+- **API-Football**: League ID `39`, season `2024` (2024-25 season — free plan covers up to 2024)
+- **Note**: Free API plan covers seasons 2022-2024. To access the live 2025-26 season, upgrade at api-football.com.
 - **PL website**: https://www.premierleague.com
 
 ## Tech Stack

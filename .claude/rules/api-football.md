@@ -11,7 +11,7 @@
 ## PL Constants
 
 - **League ID**: `39` (English Premier League)
-- **Season**: `2025` (for the 2025-26 season)
+- **Season**: `2024` (2024-25 season — free plan covers up to 2024; upgrade for 2025-26)
 - **Rounds format**: `"Regular Season - {N}"` (e.g., `"Regular Season - 30"`)
 
 ## Key Endpoints
