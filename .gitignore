@@ -206,4 +206,15 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-brainstorming_prompt.txt
+brainstorming/
+# PL TOTW Builder — local secrets and generated outputs
+.env
+.env.local
+.claude/settings.local.json
+data/
+output/
+venv/
+.venv/
+
+# Playwright browsers
+playwright-browsers/

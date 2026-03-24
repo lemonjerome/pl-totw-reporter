@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(pip freeze *)",
+      "Bash(playwright install *)",
+      "Bash(npx *)",
+      "Bash(uvx *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(cat *)",
+      "Bash(pytest *)",
+      "Bash(open *)"
+    ],
+    "deny": [
+      "Read(.claude/settings.local.json)",
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  },
+  "env": {
+    "API_FOOTBALL_BASE_URL": "https://v3.football.api-sports.io",
+    "PL_LEAGUE_ID": "39",
+    "PL_SEASON": "2025",
+    "PROJECT_EMAIL": "24hrnts@gmail.com",
+    "PERSONAL_EMAIL": "20gabramos04@gmail.com",
+    "DATA_DIR": "data",
+    "OUTPUT_DIR": "output"
+  },
+  "enableAllProjectMcpServers": true
+}
