@@ -70,13 +70,12 @@ data/
 
 | Run type | Time |
 |----------|------|
-| First run (cold soccerdata cache) | ~4–5 minutes (network I/O) |
-| Warm soccerdata cache, no project cache | ~30–60 seconds |
+| No project cache (any soccerdata cache state) | ~4–5 minutes (network I/O) |
 | Warm project cache | < 1 second |
 
-**Two cache layers**:
-1. `~/soccerdata/data/` — raw HTTP responses cached by soccerdata library
-2. `data/2025-26/matchweek-{N}/` — processed API-Football-format project cache
+**Cache layer**:
+- `data/2025-26/matchweek-{N}/` — processed project cache. Once written, subsequent runs are instant.
+- Note: soccerdata's own `~/soccerdata/data/` cache does **not** provide a meaningful speedup for per-fixture queries — network time dominates regardless. The project cache is the only effective cache layer.
 
 Parallelism: Understat and ESPN are fetched concurrently per fixture via `ThreadPoolExecutor(max_workers=2)`.
 
