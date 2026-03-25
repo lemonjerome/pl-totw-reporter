@@ -264,8 +264,8 @@ def _parse_player_from_cache(
         team_id=team_raw["id"],
         team_name=team_raw["name"],
         team_logo=team_raw["logo"],
-        nationality="",  # not available in players endpoint
-        country_code="xx",
+        nationality=p.get("nationality", ""),
+        country_code=p.get("country_code", "xx") or "xx",
         position_code=position,
         stats=stats,
         fixture_id=fixture_id,

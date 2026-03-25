@@ -24,6 +24,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -150,6 +151,10 @@ _FPL_TEAMS: dict[int, dict] = {}   # id → {name, canonical, short_name, code}
 _FPL_PLAYER_PHOTOS: dict[tuple[str, int], str] = {}
 _FPL_PLAYER_PHOTOS_LOADED = False
 
+# FootballTransfers.com player info cache: player_name_lower → {photo, country_code}
+_FT_PLAYER_INFO: dict[str, dict] = {}
+_FT_CACHE_PATH: Path | None = None
+
 
 def _load_fpl_teams() -> dict[int, dict]:
     global _FPL_TEAMS
@@ -202,7 +207,7 @@ def _load_fpl_player_photos() -> None:
         code = p.get("code")
         if not code:
             continue
-        photo_url = f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
+        photo_url = f"https://resources.premierleague.com/premierleague25/photos/players/110x140/{code}.png"
         team_id = p.get("team", 0)
         first = p.get("first_name", "").strip().lower()
         second = p.get("second_name", "").strip().lower()
@@ -219,6 +224,84 @@ def _load_fpl_player_photos() -> None:
 
     save_json_cache(cache_path, serializable)
     _FPL_PLAYER_PHOTOS_LOADED = True
+
+
+def _ft_player_info(player_name: str) -> dict:
+    """Look up player info from FootballTransfers.com search API.
+
+    Returns dict with keys: photo (URL string), country_code (ISO 2-letter lowercase).
+    Results cached in data/ft_player_photos.json. Returns empty dict on failure.
+
+    The search flag URL pattern: .../flags/w40/{country_code}.png
+    """
+    global _FT_PLAYER_INFO, _FT_CACHE_PATH
+
+    if _FT_CACHE_PATH is None:
+        _FT_CACHE_PATH = Path(__file__).parent.parent / "data" / "ft_player_photos.json"
+        cached = load_json_cache(_FT_CACHE_PATH)
+        if cached:
+            _FT_PLAYER_INFO = cached
+
+    name_lower = player_name.strip().lower()
+    if name_lower in _FT_PLAYER_INFO:
+        return _FT_PLAYER_INFO[name_lower]
+
+    try:
+        url = "https://www.footballtransfers.com/en/search/actions/search"
+        post_data = urllib.parse.urlencode({"search_value": player_name}).encode()
+        req = urllib.request.Request(
+            url,
+            data=post_data,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+
+        hits = result.get("hits", [])
+        if not hits:
+            _FT_PLAYER_INFO[name_lower] = {}
+            save_json_cache(_FT_CACHE_PATH, _FT_PLAYER_INFO)
+            return {}
+
+        # First hit is the best match
+        doc = hits[0]["document"]
+
+        # Extract photo URL from proxy wrapper
+        raw_img = doc.get("image", "")
+        parsed = urllib.parse.urlparse(raw_img)
+        qs = urllib.parse.parse_qs(parsed.query)
+        photo_url = qs.get("url", [raw_img])[0]
+
+        # Extract country code from flag URL: .../flags/w40/{code}.png
+        # FT uses "uk" for British players; normalize to API-Football codes
+        _FT_COUNTRY_MAP = {
+            "uk": "gb-eng",   # FT uses uk for all British — default to England flag
+            "gb": "gb-eng",
+        }
+        country_code = "xx"
+        flag_raw = doc.get("flag", "")
+        flag_parsed = urllib.parse.urlparse(flag_raw)
+        flag_qs = urllib.parse.parse_qs(flag_parsed.query)
+        flag_url = flag_qs.get("url", [flag_raw])[0]
+        # URL ends with e.g. "/flags/w40/fr.png" or "/flags/w40/gb-eng.png"
+        if flag_url:
+            flag_base = flag_url.rsplit("/", 1)[-1]  # "fr.png"
+            raw_code = flag_base.rsplit(".", 1)[0].lower()  # "fr"
+            country_code = _FT_COUNTRY_MAP.get(raw_code, raw_code)
+
+        info = {"photo": photo_url, "country_code": country_code}
+        _FT_PLAYER_INFO[name_lower] = info
+        save_json_cache(_FT_CACHE_PATH, _FT_PLAYER_INFO)
+        return info
+
+    except Exception:
+        _FT_PLAYER_INFO[name_lower] = {}
+        if _FT_CACHE_PATH:
+            save_json_cache(_FT_CACHE_PATH, _FT_PLAYER_INFO)
+        return {}
 
 
 def _fpl_player_photo(player_name: str, fpl_team_id: int) -> str:
@@ -263,14 +346,26 @@ def _player_id(name: str, team: str) -> int:
     return int(hashlib.md5(key.encode()).hexdigest()[:8], 16)
 
 
-def _player_photo_url(player_name: str, fpl_team_id: int, understat_player_id: Optional[int]) -> str:
-    """Best-effort player photo URL. Prefers official PL CDN photo, falls back to Understat."""
+def _player_photo_url(player_name: str, fpl_team_id: int, understat_player_id: Optional[int],
+                      team_canonical: str = "") -> str:
+    """Best-effort player photo URL.
+    Priority: FootballTransfers.com (primary) → FPL CDN → Understat.
+    """
+    info = _ft_player_info(player_name)
+    if info.get("photo"):
+        return info["photo"]
     fpl_photo = _fpl_player_photo(player_name, fpl_team_id)
     if fpl_photo:
         return fpl_photo
     if understat_player_id:
         return f"https://understat.com/images/player/{understat_player_id}.jpg"
     return ""
+
+
+def _player_country_code(player_name: str) -> str:
+    """Return ISO country code (lowercase) from FootballTransfers lookup. Returns 'xx' if unknown."""
+    info = _ft_player_info(player_name)
+    return info.get("country_code", "xx") or "xx"
 
 
 # ---------------------------------------------------------------------------
@@ -721,12 +816,12 @@ def _build_player(
     return Player(
         player_id=pid,
         name=player_name,
-        photo=_player_photo_url(player_name, team_fpl_id, u_player_id),
+        photo=_player_photo_url(player_name, team_fpl_id, u_player_id, team_canonical),
         team_id=team_fpl_id,
         team_name=team_canonical,
         team_logo=team_fpl_logo,
         nationality="",
-        country_code="xx",
+        country_code=_player_country_code(player_name),
         position_code=position_code,
         grid_position=grid_pos,
         stats=stats,
@@ -935,6 +1030,8 @@ def _players_to_api_football_format(players: list[Player], fixture: Fixture) -> 
                     "id": p.player_id,
                     "name": p.name,
                     "photo": p.photo,
+                    "nationality": p.nationality,
+                    "country_code": p.country_code,
                 },
                 "statistics": [{
                     "games": {
