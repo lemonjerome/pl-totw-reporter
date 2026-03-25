@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PL Team of the Week – Matchweek {{ matchweek }}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 1200px;
+      height: 800px;
+      background: #1a7f37;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── PITCH ─────────────────────────────────────────── */
+    .pitch {
+      position: relative;
+      width: 1200px;
+      height: 800px;
+      background: linear-gradient(180deg,
+        #1d8c3f 0%,  #1a7f37 8%,  #1d8c3f 8%,
+        #1d8c3f 16%, #1a7f37 16%, #1d8c3f 16%,
+        #1a7f37 24%, #1d8c3f 24%, #1a7f37 24%,
+        #1d8c3f 32%, #1a7f37 32%, #1d8c3f 32%,
+        #1a7f37 40%, #1d8c3f 40%, #1a7f37 40%,
+        #1d8c3f 48%, #1a7f37 48%, #1d8c3f 48%,
+        #1a7f37 56%, #1d8c3f 56%, #1a7f37 56%,
+        #1d8c3f 64%, #1a7f37 64%, #1d8c3f 64%,
+        #1a7f37 72%, #1d8c3f 72%, #1a7f37 72%,
+        #1d8c3f 80%, #1a7f37 80%, #1d8c3f 80%,
+        #1a7f37 88%, #1d8c3f 88%, #1a7f37 100%
+      );
+    }
+
+    /* ── PITCH MARKINGS (SVG overlay) ──────────────────── */
+    .pitch-markings {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    /* ── HEADER BAR ─────────────────────────────────────── */
+    .header {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      background: linear-gradient(90deg, #37003c, #2D0032);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    .header-title {
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    .header-gw {
+      color: #00ff87;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+    }
+
+    .header-sep {
+      color: rgba(255,255,255,0.4);
+      font-size: 15px;
+    }
+
+    .header-formation {
+      background: #e90052;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      letter-spacing: 1px;
+    }
+
+    /* ── PLAYER CARDS ───────────────────────────────────── */
+    .player {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      z-index: 5;
+    }
+
+    .player-badge-wrap {
+      position: relative;
+      width: 72px;
+      height: 72px;
+    }
+
+    .player-photo {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.9);
+      object-fit: cover;
+      background: #37003c;
+      display: block;
+    }
+
+    .team-badge {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.8);
+      background: white;
+      object-fit: contain;
+      padding: 2px;
+    }
+
+    .player-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.72);
+      padding: 3px 9px;
+      border-radius: 20px;
+      max-width: 130px;
+    }
+
+    .player-flag {
+      width: 18px;
+      height: 13px;
+      object-fit: cover;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .player-name {
+      color: #ffffff;
+      font-size: 11.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100px;
+      line-height: 1.2;
+    }
+
+    .player-rating {
+      background: #00ff87;
+      color: #37003c;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 8px;
+      line-height: 1.4;
+      flex-shrink: 0;
+    }
+
+    .player-pos-label {
+      color: rgba(255,255,255,0.7);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    /* ── CONNECTOR LINES ────────────────────────────────── */
+    .connectors {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+<div class="pitch">
+
+  <!-- Header bar -->
+  <div class="header">
+    <span class="header-title">Premier League</span>
+    <span class="header-sep">·</span>
+    <span class="header-title">Team of the Week</span>
+    <span class="header-sep">·</span>
+    <span class="header-gw">Matchweek {{ matchweek }}</span>
+    <span class="header-sep">·</span>
+    <span class="header-formation">{{ formation }}</span>
+  </div>
+
+  <!-- SVG: pitch markings + connector lines -->
+  <svg class="pitch-markings" viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <!-- Outer border -->
+    <rect x="40" y="60" width="1120" height="720" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Halfway line -->
+    <line x1="40" y1="420" x2="1160" y2="420" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Centre circle -->
+    <circle cx="600" cy="420" r="80" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <circle cx="600" cy="420" r="4" fill="rgba(255,255,255,0.5)"/>
+    <!-- Top penalty area -->
+    <rect x="270" y="60" width="660" height="155" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Top 6-yard box -->
+    <rect x="430" y="60" width="340" height="60" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Top penalty spot -->
+    <circle cx="600" cy="165" r="4" fill="rgba(255,255,255,0.5)"/>
+    <!-- Top penalty arc -->
+    <path d="M 455,215 A 100,100 0 0 1 745,215" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Bottom penalty area -->
+    <rect x="270" y="585" width="660" height="155" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Bottom 6-yard box -->
+    <rect x="430" y="680" width="340" height="60" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Bottom penalty spot -->
+    <circle cx="600" cy="635" r="4" fill="rgba(255,255,255,0.5)"/>
+    <!-- Bottom penalty arc -->
+    <path d="M 455,585 A 100,100 0 0 0 745,585" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <!-- Corner arcs -->
+    <path d="M 40,75 A 15,15 0 0 1 55,60" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <path d="M 1145,60 A 15,15 0 0 1 1160,75" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <path d="M 40,765 A 15,15 0 0 0 55,780" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+    <path d="M 1145,780 A 15,15 0 0 0 1160,765" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+
+    <!-- Connector lines between players in the same line -->
+    {% for line in connector_lines %}
+    <line
+      x1="{{ line.x1 }}" y1="{{ line.y1 }}"
+      x2="{{ line.x2 }}" y2="{{ line.y2 }}"
+      stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="6,4"
+    />
+    {% endfor %}
+  </svg>
+
+  <!-- Player cards -->
+  {% for player in players %}
+  <div class="player" style="left: {{ player.x }}%; top: {{ player.y }}%;">
+    <div class="player-badge-wrap">
+      <img class="player-photo"
+           src="{{ player.photo_url }}"
+           alt="{{ player.name }}"
+           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2272%22 height=%2272%22><circle cx=%2236%22 cy=%2236%22 r=%2236%22 fill=%22%2337003c%22/><text x=%2236%22 y=%2242%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2220%22>{{ player.initials }}</text></svg>'"
+      >
+      <img class="team-badge"
+           src="{{ player.team_badge_url }}"
+           alt="{{ player.team_name }}"
+           onerror="this.style.display='none'"
+      >
+    </div>
+    <div class="player-name-wrap">
+      <img class="player-flag"
+           src="{{ player.flag_url }}"
+           alt="{{ player.nationality }}"
+           onerror="this.style.display='none'"
+      >
+      <span class="player-name">{{ player.display_name }}</span>
+      {% if player.rating %}
+      <span class="player-rating">{{ player.rating }}</span>
+      {% endif %}
+    </div>
+    <span class="player-pos-label">{{ player.position_slot }}</span>
+  </div>
+  {% endfor %}
+
+</div>
+</body>
+</html>
