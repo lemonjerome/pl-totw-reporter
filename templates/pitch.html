@@ -4,86 +4,184 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PL Team of the Week – Matchweek {{ matchweek }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-    body {
-      width: 1200px;
-      height: 800px;
-      background: #1a7f37;
-      font-family: "Helvetica Neue", Arial, sans-serif;
+    html, body {
+      width: 900px;
+      height: 1330px;
       overflow: hidden;
+      background: #0e1a12;
     }
 
-    /* ── PITCH ─────────────────────────────────────────── */
-    .pitch {
-      position: relative;
-      width: 1200px;
-      height: 800px;
-      background: linear-gradient(180deg,
-        #1d8c3f 0%,  #1a7f37 8%,  #1d8c3f 8%,
-        #1d8c3f 16%, #1a7f37 16%, #1d8c3f 16%,
-        #1a7f37 24%, #1d8c3f 24%, #1a7f37 24%,
-        #1d8c3f 32%, #1a7f37 32%, #1d8c3f 32%,
-        #1a7f37 40%, #1d8c3f 40%, #1a7f37 40%,
-        #1d8c3f 48%, #1a7f37 48%, #1d8c3f 48%,
-        #1a7f37 56%, #1d8c3f 56%, #1a7f37 56%,
-        #1d8c3f 64%, #1a7f37 64%, #1d8c3f 64%,
-        #1a7f37 72%, #1d8c3f 72%, #1a7f37 72%,
-        #1d8c3f 80%, #1a7f37 80%, #1d8c3f 80%,
-        #1a7f37 88%, #1d8c3f 88%, #1a7f37 100%
-      );
-    }
-
-    /* ── PITCH MARKINGS (SVG overlay) ──────────────────── */
-    .pitch-markings {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-    }
-
-    /* ── HEADER BAR ─────────────────────────────────────── */
+    /* ── HEADER ─────────────────────────────────────────── */
     .header {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 52px;
-      background: linear-gradient(90deg, #37003c, #2D0032);
+      position: relative;
+      width: 900px;
+      height: 70px;
+      background: linear-gradient(135deg, #37003c 0%, #1e0026 50%, #100016 100%);
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 12px;
-      z-index: 10;
+      overflow: hidden;
+      z-index: 20;
+      flex-shrink: 0;
+    }
+
+    /* Decorative diagonal accent */
+    .header::before {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 0; bottom: 0;
+      width: 340px;
+      background: rgba(0,255,135,0.07);
+      transform: skewX(-15deg);
+      transform-origin: top left;
+    }
+
+    /* Bottom accent line */
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #e90052, #00ff87 40%, transparent 80%);
+    }
+
+    .header-pl-logo {
+      position: relative;
+      margin-left: 20px;
+      margin-right: 20px;
+      height: 44px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .header-pl-logo img {
+      height: 44px;
+      width: auto;
+      display: block;
+      filter: brightness(0) invert(1);
+    }
+
+    .header-divider {
+      width: 1px;
+      height: 32px;
+      background: rgba(255,255,255,0.2);
+      margin: 0 18px;
+      flex-shrink: 0;
+    }
+
+    .header-text-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .header-league {
+      font-family: 'Oswald', Impact, sans-serif;
+      font-weight: 500;
+      font-size: 10px;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      line-height: 1;
     }
 
     .header-title {
-      color: #ffffff;
-      font-size: 15px;
+      font-family: 'Oswald', Impact, sans-serif;
       font-weight: 700;
-      letter-spacing: 1.5px;
+      font-size: 22px;
+      color: #ffffff;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    .header-spacer { flex: 1; }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 24px;
+    }
+
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 12px;
+      border-radius: 4px;
+      font-family: 'Oswald', Impact, sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 1px;
       text-transform: uppercase;
     }
 
-    .header-gw {
+    .badge-gw {
+      background: rgba(0,255,135,0.15);
       color: #00ff87;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
+      border: 1px solid rgba(0,255,135,0.4);
     }
 
-    .header-sep {
-      color: rgba(255,255,255,0.4);
-      font-size: 15px;
-    }
-
-    .header-formation {
+    .badge-formation {
       background: #e90052;
       color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 12px;
-      letter-spacing: 1px;
+    }
+
+    /* ── PITCH ─────────────────────────────────────────── */
+    .pitch-wrap {
+      position: relative;
+      width: 900px;
+      height: 1260px;
+      /* Lawn stripes — horizontal bands, each ~90px */
+      background:
+        repeating-linear-gradient(
+          180deg,
+          #196c2d 0px,
+          #196c2d 90px,
+          #1e8035 90px,
+          #1e8035 180px
+        );
+      overflow: hidden;
+    }
+
+    /* Dark vignette edges for depth */
+    .pitch-wrap::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        ellipse 105% 90% at 50% 50%,
+        transparent 55%,
+        rgba(0,0,0,0.35) 100%
+      );
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    /* Top goal-mouth shadow */
+    .pitch-wrap::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 80px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    /* ── PITCH SVG (markings) ───────────────────────────── */
+    .pitch-svg {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
     }
 
     /* ── PLAYER CARDS ───────────────────────────────────── */
@@ -93,21 +191,26 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 5px;
-      z-index: 5;
+      gap: 4px;
+      z-index: 10;
     }
 
-    .player-badge-wrap {
+    .player-photo-ring {
       position: relative;
-      width: 72px;
-      height: 72px;
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      padding: 3px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.3));
+      box-shadow:
+        0 4px 16px rgba(0,0,0,0.6),
+        0 0 0 1px rgba(255,255,255,0.15);
     }
 
     .player-photo {
-      width: 72px;
-      height: 72px;
+      width: 70px;
+      height: 70px;
       border-radius: 50%;
-      border: 3px solid rgba(255, 255, 255, 0.9);
       object-fit: cover;
       background: #37003c;
       display: block;
@@ -115,25 +218,29 @@
 
     .team-badge {
       position: absolute;
-      bottom: -4px;
-      right: -4px;
+      bottom: -2px;
+      right: -2px;
       width: 26px;
       height: 26px;
-      border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.8);
       background: white;
-      object-fit: contain;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.9);
       padding: 2px;
+      object-fit: contain;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     }
 
-    .player-name-wrap {
+    .player-nameplate {
       display: flex;
       align-items: center;
-      gap: 4px;
-      background: rgba(0, 0, 0, 0.72);
-      padding: 3px 9px;
-      border-radius: 20px;
-      max-width: 130px;
+      gap: 5px;
+      background: rgba(5, 2, 20, 0.82);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(4px);
+      padding: 3px 8px 3px 6px;
+      border-radius: 22px;
+      max-width: 140px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
     }
 
     .player-flag {
@@ -142,134 +249,172 @@
       object-fit: cover;
       border-radius: 2px;
       flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
 
     .player-name {
-      color: #ffffff;
-      font-size: 11.5px;
+      font-family: 'Barlow Condensed', 'Oswald', Arial, sans-serif;
       font-weight: 700;
+      font-size: 12px;
+      color: #ffffff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 100px;
-      line-height: 1.2;
+      max-width: 88px;
+      letter-spacing: 0.3px;
+      line-height: 1;
     }
 
     .player-rating {
-      background: #00ff87;
+      font-family: 'Oswald', Arial, sans-serif;
+      font-weight: 700;
+      font-size: 11px;
       color: #37003c;
-      font-size: 10px;
-      font-weight: 800;
+      background: #00ff87;
       padding: 1px 5px;
-      border-radius: 8px;
+      border-radius: 10px;
       line-height: 1.4;
       flex-shrink: 0;
+      letter-spacing: 0.2px;
     }
 
-    .player-pos-label {
-      color: rgba(255,255,255,0.7);
-      font-size: 9px;
+    .player-pos {
+      font-family: 'Oswald', Arial, sans-serif;
       font-weight: 600;
-      letter-spacing: 1px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.65);
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      margin-top: -2px;
-    }
-
-    /* ── CONNECTOR LINES ────────────────────────────────── */
-    .connectors {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-      z-index: 2;
+      line-height: 1;
     }
   </style>
 </head>
 <body>
-<div class="pitch">
 
-  <!-- Header bar -->
+  <!-- ── HEADER ─── -->
   <div class="header">
-    <span class="header-title">Premier League</span>
-    <span class="header-sep">·</span>
-    <span class="header-title">Team of the Week</span>
-    <span class="header-sep">·</span>
-    <span class="header-gw">Matchweek {{ matchweek }}</span>
-    <span class="header-sep">·</span>
-    <span class="header-formation">{{ formation }}</span>
+    <div class="header-pl-logo">
+      <img src="https://www.premierleague.com/resources/v1.41.18/i/svg-files/elements/pl-logo-dark.svg" alt="Premier League">
+    </div>
+    <div class="header-text-group">
+      <span class="header-league">Premier League</span>
+      <span class="header-title">Team of the Week</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-right">
+      <span class="header-badge badge-gw">Matchweek {{ matchweek }}</span>
+      <span class="header-badge badge-formation">{{ formation }}</span>
+    </div>
   </div>
 
-  <!-- SVG: pitch markings + connector lines -->
-  <svg class="pitch-markings" viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
-    <!-- Outer border -->
-    <rect x="40" y="60" width="1120" height="720" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Halfway line -->
-    <line x1="40" y1="420" x2="1160" y2="420" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Centre circle -->
-    <circle cx="600" cy="420" r="80" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <circle cx="600" cy="420" r="4" fill="rgba(255,255,255,0.5)"/>
-    <!-- Top penalty area -->
-    <rect x="270" y="60" width="660" height="155" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Top 6-yard box -->
-    <rect x="430" y="60" width="340" height="60" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Top penalty spot -->
-    <circle cx="600" cy="165" r="4" fill="rgba(255,255,255,0.5)"/>
-    <!-- Top penalty arc -->
-    <path d="M 455,215 A 100,100 0 0 1 745,215" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Bottom penalty area -->
-    <rect x="270" y="585" width="660" height="155" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Bottom 6-yard box -->
-    <rect x="430" y="680" width="340" height="60" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Bottom penalty spot -->
-    <circle cx="600" cy="635" r="4" fill="rgba(255,255,255,0.5)"/>
-    <!-- Bottom penalty arc -->
-    <path d="M 455,585 A 100,100 0 0 0 745,585" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <!-- Corner arcs -->
-    <path d="M 40,75 A 15,15 0 0 1 55,60" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <path d="M 1145,60 A 15,15 0 0 1 1160,75" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <path d="M 40,765 A 15,15 0 0 0 55,780" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-    <path d="M 1145,780 A 15,15 0 0 0 1160,765" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+  <!-- ── PITCH ─── -->
+  <div class="pitch-wrap">
 
-    <!-- Connector lines between players in the same line -->
-    {% for line in connector_lines %}
-    <line
-      x1="{{ line.x1 }}" y1="{{ line.y1 }}"
-      x2="{{ line.x2 }}" y2="{{ line.y2 }}"
-      stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="6,4"
-    />
+    <!--
+      SVG pitch markings derived from the Football_field.svg reference.
+      Field: x=22, y=10, width=856, height=1214 (within 900×1260 pitch-wrap)
+      Scale X=856/68=12.588  Scale Y=1214/105=11.562
+      Centre: (450, 617)
+    -->
+    <svg class="pitch-svg" viewBox="0 0 900 1260" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="net-top" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+          <path d="M 0 0 L 8 8 M 8 0 L 0 8" stroke="rgba(255,255,255,0.25)" stroke-width="0.5" fill="none"/>
+        </pattern>
+        <pattern id="net-bot" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+          <path d="M 0 0 L 8 8 M 8 0 L 0 8" stroke="rgba(255,255,255,0.25)" stroke-width="0.5" fill="none"/>
+        </pattern>
+      </defs>
+
+      <!-- ─ PITCH MARKINGS ─ stroke only, no fill ─ -->
+      <g fill="none" stroke="rgba(255,255,255,0.82)" stroke-width="1.8" stroke-linecap="round">
+
+        <!-- Border -->
+        <rect x="22" y="10" width="856" height="1214"/>
+
+        <!-- Centre line -->
+        <line x1="22" y1="617" x2="878" y2="617"/>
+
+        <!-- Centre circle (circle — field is now portrait/natural proportions) -->
+        <ellipse cx="450" cy="617" rx="115" ry="106"/>
+        <!-- Centre spot -->
+        <circle cx="450" cy="617" r="4" fill="rgba(255,255,255,0.82)" stroke="none"/>
+
+        <!-- ─ TOP HALF ─ -->
+
+        <!-- Top penalty area -->
+        <path d="M 196,10 V 201 H 704 V 10"/>
+
+        <!-- Top goal area -->
+        <path d="M 335,10 V 74 H 565 V 10"/>
+
+        <!-- Top penalty spot -->
+        <circle cx="450" cy="136" r="4" fill="rgba(255,255,255,0.82)" stroke="none"/>
+
+        <!-- Top penalty arc -->
+        <path d="M 359,201 a 115,106 0 0 0 183,0"/>
+
+        <!-- ─ BOTTOM HALF ─ -->
+
+        <!-- Bottom penalty area -->
+        <path d="M 196,1224 V 1033 H 704 V 1224"/>
+
+        <!-- Bottom goal area -->
+        <path d="M 335,1224 V 1160 H 565 V 1224"/>
+
+        <!-- Bottom penalty spot -->
+        <circle cx="450" cy="1098" r="4" fill="rgba(255,255,255,0.82)" stroke="none"/>
+
+        <!-- Bottom penalty arc -->
+        <path d="M 359,1033 a 115,106 0 0 1 183,0"/>
+
+        <!-- ─ CORNER ARCS ─ rx=25, ry=23 -->
+        <!-- TL --> <path d="M 22,33 a 25,23 0 0 0 25,-23"/>
+        <!-- TR --> <path d="M 853,10 a 25,23 0 0 0 25,23"/>
+        <!-- BR --> <path d="M 878,1201 a 25,23 0 0 0 -25,23"/>
+        <!-- BL --> <path d="M 47,1224 a 25,23 0 0 0 -25,-23"/>
+
+      </g>
+
+      <!-- ─ GOAL NETS ─ -->
+      <rect x="335" y="10" width="230" height="64" fill="url(#net-top)" opacity="0.5"/>
+      <rect x="335" y="1160" width="230" height="64" fill="url(#net-bot)" opacity="0.5"/>
+
+      <!-- ─ CONNECTOR LINES between players in same line ─ -->
+      <g stroke="rgba(255,255,255,0.28)" stroke-width="1.5" stroke-dasharray="6,5" fill="none">
+        {% for line in connector_lines %}
+        <line x1="{{ line.x1 }}" y1="{{ line.y1 }}" x2="{{ line.x2 }}" y2="{{ line.y2 }}"/>
+        {% endfor %}
+      </g>
+
+    </svg><!-- /pitch-svg -->
+
+    <!-- ── PLAYER CARDS ─── -->
+    {% for player in players %}
+    <div class="player" style="left:{{ player.x }}%; top:{{ player.y }}%;">
+      <div class="player-photo-ring">
+        <img class="player-photo"
+          src="{{ player.photo_url }}"
+          alt="{{ player.name }}"
+          onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 70 70%22><circle cx=%2235%22 cy=%2235%22 r=%2235%22 fill=%22%2337003c%22/><text x=%2235%22 y=%2242%22 font-family=%22Arial%22 font-weight=%22bold%22 font-size=%2218%22 fill=%22%2300ff87%22 text-anchor=%22middle%22>{{ player.initials }}</text></svg>'">
+        <img class="team-badge"
+          src="{{ player.team_badge_url }}"
+          alt="{{ player.team_name }}"
+          onerror="this.style.display='none'">
+      </div>
+      <div class="player-nameplate">
+        <img class="player-flag"
+          src="{{ player.flag_url }}"
+          alt=""
+          onerror="this.style.display='none'">
+        <span class="player-name">{{ player.display_name }}</span>
+        {% if player.rating %}<span class="player-rating">{{ player.rating }}</span>{% endif %}
+      </div>
+      <span class="player-pos">{{ player.position_slot }}</span>
+    </div>
     {% endfor %}
-  </svg>
 
-  <!-- Player cards -->
-  {% for player in players %}
-  <div class="player" style="left: {{ player.x }}%; top: {{ player.y }}%;">
-    <div class="player-badge-wrap">
-      <img class="player-photo"
-           src="{{ player.photo_url }}"
-           alt="{{ player.name }}"
-           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2272%22 height=%2272%22><circle cx=%2236%22 cy=%2236%22 r=%2236%22 fill=%22%2337003c%22/><text x=%2236%22 y=%2242%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2220%22>{{ player.initials }}</text></svg>'"
-      >
-      <img class="team-badge"
-           src="{{ player.team_badge_url }}"
-           alt="{{ player.team_name }}"
-           onerror="this.style.display='none'"
-      >
-    </div>
-    <div class="player-name-wrap">
-      <img class="player-flag"
-           src="{{ player.flag_url }}"
-           alt="{{ player.nationality }}"
-           onerror="this.style.display='none'"
-      >
-      <span class="player-name">{{ player.display_name }}</span>
-      {% if player.rating %}
-      <span class="player-rating">{{ player.rating }}</span>
-      {% endif %}
-    </div>
-    <span class="player-pos-label">{{ player.position_slot }}</span>
-  </div>
-  {% endfor %}
+  </div><!-- /pitch-wrap -->
 
-</div>
 </body>
 </html>
