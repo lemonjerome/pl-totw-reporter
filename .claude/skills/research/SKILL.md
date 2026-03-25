@@ -32,12 +32,22 @@ Fetches all fixtures from the FPL API and saves to `data/2025-26/matchweek-{N}/f
 
 After this completes, read `data/2025-26/matchweek-$ARGUMENTS/fixtures.json` and extract all fixture IDs from the `"fixture"."id"` field of each element in the JSON array.
 
-## Step 3: Split Fixtures into 3 Groups
+## Step 3: Split Fixtures into 3 Equal Groups
 
-Divide the fixture IDs into 3 roughly equal groups:
-- **Agent 1**: first ~4 fixture IDs (indices 0–3)
-- **Agent 2**: next ~3 fixture IDs (indices 4–6)
-- **Agent 3**: remaining fixture IDs (indices 7–9)
+Let N = total number of fixture IDs. Compute chunk_size = ceil(N / 3).
+
+- **Agent 1**: indices 0 to chunk_size-1
+- **Agent 2**: indices chunk_size to 2×chunk_size-1
+- **Agent 3**: indices 2×chunk_size to end
+
+Examples:
+| N  | chunk | Agent 1 | Agent 2 | Agent 3 |
+|----|-------|---------|---------|---------|
+| 10 |  4    | 0–3 (4) | 4–7 (4) | 8–9 (2) |
+| 9  |  3    | 0–2 (3) | 3–5 (3) | 6–8 (3) |
+| 8  |  3    | 0–2 (3) | 3–5 (3) | 6–7 (2) |
+
+This keeps loads balanced — the largest agent never has more than 1 extra fixture vs the others.
 
 ## Step 4: Launch 3 Parallel Fetcher Agents
 
