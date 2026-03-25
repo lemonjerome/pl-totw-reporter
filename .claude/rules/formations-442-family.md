@@ -63,15 +63,17 @@ All formations with a flat back four and midfield-focused structure.
 ---
 
 ## 4-2-3-1
-**Line groups**: Defense | Def-Mid (CDM, CDM) | Att-Mid (RW, CAM, LW) | Attack (ST)
-**Positions**: GK · RB · CB · CB · LB · CDM · CDM · RW · CAM · LW · ST
+**Line groups**: Defense | Def-Mid (CDM, CDM) | Mid (RM, CAM, LM) | Attack (ST)
+**Positions**: GK · RB · CB · CB · LB · CDM · CDM · RM · CAM · LM · ST
 **Strengths**: Double pivot shields defence; clear roles throughout; flexible for possession or counter
 **Weaknesses**: Lone striker isolated without CAM/wingers making runs; gaps if both full-backs advance
 
+The "3" are **attacking midfielders** (RM, CAM, LM) belonging to the midfield line — they connect to each other. The lone ST belongs to the attack line and stands alone. Wide players are RM/LM (not RW/LW), as they operate in the midfield third.
+
 ```json
-{ "GK":[{"x":50,"y":88}], "RB":[{"x":87,"y":75}], "CB":[{"x":36,"y":75},{"x":64,"y":75}],
-  "LB":[{"x":13,"y":75}], "CDM":[{"x":36,"y":59},{"x":64,"y":59}],
-  "RW":[{"x":85,"y":40}], "CAM":[{"x":50,"y":38}], "LW":[{"x":15,"y":40}],
+{ "GK":[{"x":50,"y":91}], "RB":[{"x":88,"y":75}], "CB":[{"x":36,"y":75},{"x":64,"y":75}],
+  "LB":[{"x":12,"y":75}], "CDM":[{"x":36,"y":59},{"x":64,"y":59}],
+  "RM":[{"x":88,"y":40}], "CAM":[{"x":50,"y":38}], "LM":[{"x":12,"y":40}],
   "ST":[{"x":50,"y":20}] }
 ```
 
