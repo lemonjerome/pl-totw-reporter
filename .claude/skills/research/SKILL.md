@@ -1,61 +1,66 @@
 ---
 name: research
-description: Fetch all Premier League matchweek data from API-Football and scrape the PL website for match reports and commentaries. Run before analyze. Usage: /research [matchweek_number]
+description: Fetch all Premier League matchweek data from soccerdata (FPL + Understat + ESPN) and scrape the PL website for match reports and commentaries. Run before analyze. Usage: /research [matchweek_number]
 ---
 
 # Research — Data Collection for Matchweek
 
-Collect all data for matchweek $ARGUMENTS from API-Football and the PL website.
+Collect all data for matchweek $ARGUMENTS from soccerdata sources and the PL website.
 
 ## Prerequisites
 
 Check that scripts exist:
 ```bash
-ls scripts/api_football.py scripts/pl_scraper.py
+ls scripts/soccerdata_client.py scripts/pl_scraper.py
 ```
 
-Check daily API budget:
+## Step 1: Check Fixture Status
+
 ```bash
-python scripts/api_football.py check-budget
+python scripts/soccerdata_client.py check-status $ARGUMENTS
 ```
 
-## Step 1: Fetch Fixtures
+Verify all 10 fixtures are complete (status `FT`). If any are `NS` or in-progress, inform the user and do not proceed.
+
+## Step 2: Fetch Fixtures
 
 ```bash
-python scripts/api_football.py fetch-round $ARGUMENTS
+python scripts/soccerdata_client.py fetch-round $ARGUMENTS
 ```
 
 This will:
-- Call `/fixtures?league=39&season=2025&round=Regular Season - {N}`
-- Save to `data/2025-26/matchweek-{N}/fixtures.json`
+- Fetch fixtures from the FPL API for the matchweek
+- Save to `data/2025-26/matchweek-{N}/fixtures.json` in API-Football-compatible format
 - Return: list of fixture IDs and their statuses
 
-Verify all 10 fixtures are returned. If a fixture has status `PST` (postponed), note it — it may affect formation/player counts.
+Verify all 10 fixtures are returned. If a fixture has status `PST` (postponed), note it.
 
-## Step 2: Fetch Player Stats
+## Step 3: Fetch Player Stats
 
-For each fixture ID returned in Step 1:
 ```bash
-python scripts/api_football.py fetch-players {fixture_id}
+python scripts/soccerdata_client.py fetch-players $ARGUMENTS
 ```
 
 This will:
-- Call `/fixtures/players?fixture={fixture_id}`
-- Save to `data/2025-26/matchweek-{N}/players_{fixture_id}.json`
+- Fetch Understat (goals, assists, key_passes, minutes) and ESPN (saves, shots_on_target, formation) in parallel per fixture
+- Save to `data/2025-26/matchweek-{N}/players_{fixture_id}.json` for each fixture
 - Return: all player stats for both teams
 
-Run this for all 10 fixtures. If a fixture was postponed, skip it.
+**Note**: Tackles, interceptions, blocks are not available from soccerdata sources. CB/CDM selection will use available stats.
 
-## Step 3: Fetch Lineups (if needed)
+**Performance**: First run ~4–5 minutes (network). Warm soccerdata cache ~30–60s. See `.claude/rules/soccerdata.md` for details.
 
-If formation data is not available in the fixtures response:
+## Step 4: Fetch Lineups
+
 ```bash
-python scripts/api_football.py fetch-lineups {fixture_id}
+python scripts/soccerdata_client.py fetch-lineups $ARGUMENTS
 ```
 
-Save to `data/2025-26/matchweek-{N}/lineups_{fixture_id}.json`
+This will:
+- Fetch ESPN lineup data (formation string + starting XI) for each fixture
+- Save to `data/2025-26/matchweek-{N}/lineups_{fixture_id}.json`
 
-## Step 4: Scrape Match Reports
+## Step 5: Scrape Match Reports
 
 ```bash
 python scripts/pl_scraper.py match-reports $ARGUMENTS
@@ -68,7 +73,7 @@ This will:
 
 If scraping fails for a fixture, log the failure and continue. Missing reports should not block the process.
 
-## Step 5: Scrape Commentaries
+## Step 6: Scrape Commentaries
 
 ```bash
 python scripts/pl_scraper.py commentaries $ARGUMENTS
@@ -79,7 +84,7 @@ This will:
 - Extract commentary text
 - Save to `data/2025-26/matchweek-{N}/commentaries/`
 
-## Step 6: Verify Data
+## Step 7: Verify Data
 
 Check all expected files exist:
 ```bash
@@ -89,6 +94,7 @@ ls data/2025-26/matchweek-$ARGUMENTS/
 Expected:
 - `fixtures.json` ✅
 - `players_{id}.json` × 10 ✅
+- `lineups_{id}.json` × 10 ✅
 - `reports/*.txt` (may be partial) ⚠️
 - `commentaries/*.txt` (may be partial) ⚠️
 
@@ -99,7 +105,8 @@ Report back:
 Research complete for Matchweek {N}:
 ✅ Fixtures: 10/10 fetched
 ✅ Player stats: 10/10 fetched ({total_players} players)
+✅ Lineups: 10/10 fetched
 ✅ Match reports: {X}/10 scraped
 ✅ Commentaries: {Y}/10 scraped
-API requests used today: {count}/100
+Data sources: FPL API + Understat + ESPN (via soccerdata)
 ```
