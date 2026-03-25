@@ -65,7 +65,7 @@ from data_models import (
 BASE_URL = os.environ.get("API_FOOTBALL_BASE_URL", "https://v3.football.api-sports.io")
 API_KEY = os.environ.get("API_FOOTBALL_KEY", "")
 LEAGUE_ID = int(os.environ.get("PL_LEAGUE_ID", "39"))
-SEASON = int(os.environ.get("PL_SEASON", "2025"))
+SEASON = int(os.environ.get("PL_SEASON", "2024"))
 
 
 # ---------------------------------------------------------------------------
