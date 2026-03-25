@@ -1,12 +1,13 @@
 # English Premier League — Team of the Week Builder
 
-Automated EPL TOTW system. Fetches match data from API-Football, scrapes the PL website for match reports and commentaries, selects the best formation and players, generates a visual team diagram, creates a Google Slides presentation, and delivers results via Gmail.
+Automated EPL TOTW system. Fetches 2025-26 match data via soccerdata (FPL + Understat + ESPN), scrapes the PL website for match reports and commentaries, selects the best formation and players, generates a visual team diagram, creates a Google Slides presentation, and delivers results via Gmail.
 
 ## Project Details
 
 - **From email**: 24hrnts@gmail.com
 - **To email**: 20gabramos04@gmail.com
-- **API-Football**: League ID `39`, season `2024` (2024-25 season — free plan; season 2025 requires paid upgrade)
+- **Data source**: `soccerdata` library — FPL API (fixtures) + Understat (attacking stats) + ESPN (saves/formation). No API key required.
+- **API-Football**: Legacy — covers seasons 2022–2024 only. Use `scripts/api_football.py` for historical data. Script: `scripts/soccerdata_client.py` for 2025-26.
 - **PL website**: https://www.premierleague.com
 
 ## Tech Stack
@@ -20,11 +21,13 @@ Automated EPL TOTW system. Fetches match data from API-Football, scrapes the PL 
 
 ## Key Conventions
 
-**API calls**: Always go through `scripts/api_football.py`. It handles rate limiting (100 req/day) and caches responses. Never call the API directly.
+**2025-26 data**: Always use `scripts/soccerdata_client.py`. It combines FPL API + Understat + ESPN, caches to `data/2025-26/matchweek-{N}/` in API-Football format. No daily budget.
 
-**Caching**: All API responses cached in `data/2025-26/matchweek-{N}/`. All generated outputs in `output/matchweek-{N}/`.
+**Historical data (2022-24)**: Use `scripts/api_football.py`. Handles rate limiting (100 req/day) and caches responses.
 
-**Rate limit tracking**: `data/.api_usage.json` tracks daily API-Football usage. Check before making calls.
+**Caching**: All data cached in `data/2025-26/matchweek-{N}/`. All generated outputs in `output/matchweek-{N}/`.
+
+**Rate limit tracking**: `data/.api_usage.json` tracks daily API-Football usage (legacy only).
 
 **Domain knowledge**: All football rules, formations, position roles, API docs, and design specs live in `.claude/rules/`. Agents load these automatically.
 
@@ -33,8 +36,8 @@ Automated EPL TOTW system. Fetches match data from API-Football, scrapes the PL 
 ## Quick Commands
 
 ```bash
-# Fetch matchweek data
-python scripts/api_football.py fetch-round 30
+# Fetch matchweek data (2025-26)
+python scripts/soccerdata_client.py fetch-round 30
 
 # Run analysis
 python scripts/formation_analyzer.py 30
@@ -65,7 +68,7 @@ In Claude Code chat:
 
 ## Agent Delegation
 
-- **@researcher** — data collection (API-Football), PL website scraping, formation analysis, player selection, synthesis reports
+- **@researcher** — data collection (soccerdata: FPL+Understat+ESPN), PL website scraping, formation analysis, player selection, synthesis reports
 - **@visualizer** — team diagram PNG, Google Slides presentation, PDF export, Gmail delivery
 
 ## Project Structure
