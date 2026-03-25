@@ -34,20 +34,20 @@ After this completes, read `data/2025-26/matchweek-$ARGUMENTS/fixtures.json` and
 
 ## Step 3: Split Fixtures into 3 Equal Groups
 
-Let N = total number of fixture IDs. Compute chunk_size = ceil(N / 3).
-
-- **Agent 1**: indices 0 to chunk_size-1
-- **Agent 2**: indices chunk_size to 2×chunk_size-1
-- **Agent 3**: indices 2×chunk_size to end
+Use floor division + remainder distribution:
+1. base = N // 3
+2. remainder = N % 3
+3. Agent sizes: agent i gets `base + 1` if `i < remainder`, else `base`
 
 Examples:
-| N  | chunk | Agent 1 | Agent 2 | Agent 3 |
-|----|-------|---------|---------|---------|
-| 10 |  4    | 0–3 (4) | 4–7 (4) | 8–9 (2) |
-| 9  |  3    | 0–2 (3) | 3–5 (3) | 6–8 (3) |
-| 8  |  3    | 0–2 (3) | 3–5 (3) | 6–7 (2) |
+| N  | base | rem | Agent 1 | Agent 2 | Agent 3 |
+|----|------|-----|---------|---------|---------|
+| 10 |  3   |  1  | 4 (3+1) | 3       | 3       |
+| 9  |  3   |  0  | 3       | 3       | 3       |
+| 8  |  2   |  2  | 3 (2+1) | 3 (2+1) | 2       |
+| 7  |  2   |  1  | 3 (2+1) | 2       | 2       |
 
-This keeps loads balanced — the largest agent never has more than 1 extra fixture vs the others.
+Remainder fixtures are assigned starting from Agent 1, then Agent 2 if needed.
 
 ## Step 4: Launch 3 Parallel Fetcher Agents
 

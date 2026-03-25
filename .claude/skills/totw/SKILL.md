@@ -62,11 +62,12 @@ python3 scripts/soccerdata_client.py fetch-round {N}
 
 Read `data/2025-26/matchweek-{N}/fixtures.json` and extract all fixture IDs.
 
-**3b. Split into 3 equal groups** using chunk_size = ceil(N / 3):
-- Agent 1: indices 0 to chunk_size-1
-- Agent 2: indices chunk_size to 2×chunk_size-1
-- Agent 3: indices 2×chunk_size to end
-(e.g. N=10 → 4/4/2; N=9 → 3/3/3; N=8 → 3/3/2)
+**3b. Split into 3 equal groups** using floor division + remainder:
+- base = N // 3, remainder = N % 3
+- Agent 1 gets base + (1 if remainder >= 1 else 0)
+- Agent 2 gets base + (1 if remainder >= 2 else 0)
+- Agent 3 gets base
+(e.g. N=10 → 4/3/3; N=9 → 3/3/3; N=8 → 3/3/2)
 
 **3c. Spawn all 3 `researcher-fetcher` agents in a SINGLE message (parallel):**
 
