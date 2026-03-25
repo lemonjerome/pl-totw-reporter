@@ -146,6 +146,10 @@ def _normalize_team(name: str, mapping: dict[str, str]) -> str:
 
 _FPL_TEAMS: dict[int, dict] = {}   # id → {name, canonical, short_name, code}
 
+# FPL player photo lookup: (normalized_full_name, fpl_team_id) → photo_url
+_FPL_PLAYER_PHOTOS: dict[tuple[str, int], str] = {}
+_FPL_PLAYER_PHOTOS_LOADED = False
+
 
 def _load_fpl_teams() -> dict[int, dict]:
     global _FPL_TEAMS
@@ -175,6 +179,63 @@ def _load_fpl_teams() -> dict[int, dict]:
     return _FPL_TEAMS
 
 
+def _load_fpl_player_photos() -> None:
+    """Load FPL player photo lookup from bootstrap-static (fetched once with teams)."""
+    global _FPL_PLAYER_PHOTOS, _FPL_PLAYER_PHOTOS_LOADED
+    if _FPL_PLAYER_PHOTOS_LOADED:
+        return
+
+    cache_path = Path(__file__).parent.parent / "data" / "fpl_player_photos.json"
+    cached = load_json_cache(cache_path)
+    if cached:
+        _FPL_PLAYER_PHOTOS = {(k.split("|")[0], int(k.split("|")[1])): v for k, v in cached.items()}
+        _FPL_PLAYER_PHOTOS_LOADED = True
+        return
+
+    print("  [FPL] Loading player photo registry from bootstrap-static...")
+    url = f"{FPL_BASE}/bootstrap-static/"
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        data = json.loads(resp.read())
+
+    serializable: dict[str, str] = {}
+    for p in data.get("elements", []):
+        code = p.get("code")
+        if not code:
+            continue
+        photo_url = f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
+        team_id = p.get("team", 0)
+        first = p.get("first_name", "").strip().lower()
+        second = p.get("second_name", "").strip().lower()
+        web_name = p.get("web_name", "").strip().lower()
+        full_name = f"{first} {second}".strip()
+        # Last word of second_name handles compound surnames ("Borges Fernandes" → "fernandes")
+        last_surname = second.split()[-1] if second else ""
+        candidates = {full_name, web_name, last_surname} - {""}
+        for key_name in candidates:
+            key = f"{key_name}|{team_id}"
+            # setdefault: first match wins (prevents clobbering unique keys with common surnames)
+            _FPL_PLAYER_PHOTOS.setdefault((key_name, team_id), photo_url)
+            serializable.setdefault(key, photo_url)
+
+    save_json_cache(cache_path, serializable)
+    _FPL_PLAYER_PHOTOS_LOADED = True
+
+
+def _fpl_player_photo(player_name: str, fpl_team_id: int) -> str:
+    """Return official PL player photo URL by matching name + team. Falls back to ''."""
+    _load_fpl_player_photos()
+    name_lower = player_name.strip().lower()
+    # Try full name match
+    photo = _FPL_PLAYER_PHOTOS.get((name_lower, fpl_team_id), "")
+    if photo:
+        return photo
+    # Try last name only
+    last = name_lower.split()[-1] if name_lower else ""
+    if last:
+        photo = _FPL_PLAYER_PHOTOS.get((last, fpl_team_id), "")
+    return photo
+
+
 def _team_badge_url(fpl_team_id: int) -> str:
     """FPL CDN badge URL for a team."""
     teams = _load_fpl_teams()
@@ -202,8 +263,11 @@ def _player_id(name: str, team: str) -> int:
     return int(hashlib.md5(key.encode()).hexdigest()[:8], 16)
 
 
-def _player_photo_url(understat_player_id: Optional[int]) -> str:
-    """Best-effort player photo URL."""
+def _player_photo_url(player_name: str, fpl_team_id: int, understat_player_id: Optional[int]) -> str:
+    """Best-effort player photo URL. Prefers official PL CDN photo, falls back to Understat."""
+    fpl_photo = _fpl_player_photo(player_name, fpl_team_id)
+    if fpl_photo:
+        return fpl_photo
     if understat_player_id:
         return f"https://understat.com/images/player/{understat_player_id}.jpg"
     return ""
@@ -657,7 +721,7 @@ def _build_player(
     return Player(
         player_id=pid,
         name=player_name,
-        photo=_player_photo_url(u_player_id),
+        photo=_player_photo_url(player_name, team_fpl_id, u_player_id),
         team_id=team_fpl_id,
         team_name=team_canonical,
         team_logo=team_fpl_logo,

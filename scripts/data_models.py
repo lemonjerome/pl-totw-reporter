@@ -243,14 +243,22 @@ class Player(BaseModel):
 
     @property
     def photo_url(self) -> str:
+        # Use stored photo URL if available (e.g. Understat for soccerdata players)
+        if self.photo:
+            return self.photo
         return f"https://media.api-sports.io/football/players/{self.player_id}.png"
 
     @property
     def flag_url(self) -> str:
-        return f"https://media.api-sports.io/flags/{self.country_code}.svg"
+        if self.country_code and self.country_code != "xx":
+            return f"https://media.api-sports.io/flags/{self.country_code}.svg"
+        return ""
 
     @property
     def team_badge_url(self) -> str:
+        # Use stored team logo if available (e.g. PL CDN for soccerdata players)
+        if self.team_logo:
+            return self.team_logo
         return f"https://media.api-sports.io/football/teams/{self.team_id}.png"
 
     @property
