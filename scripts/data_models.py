@@ -109,18 +109,22 @@ class PlayerShots(BaseModel):
 class PlayerPasses(BaseModel):
     total: Optional[int] = None
     key: Optional[int] = None
-    accuracy: Optional[str] = None   # "87" (percent)
+    accuracy: Optional[str] = None        # "87" (percent)
+    accurate_crosses: Optional[int] = None  # accurateCross (SofaScore)
 
 
 class PlayerTackles(BaseModel):
-    total: Optional[int] = None
-    blocks: Optional[int] = None
-    interceptions: Optional[int] = None
+    total: Optional[int] = None          # wonTackle (SofaScore)
+    blocks: Optional[int] = None         # outfielderBlock
+    interceptions: Optional[int] = None  # interceptionWon
+    clearances: Optional[int] = None     # totalClearance
 
 
 class PlayerDuels(BaseModel):
     total: Optional[int] = None
     won: Optional[int] = None
+    aerial_won: Optional[int] = None   # aerialWon
+    aerial_lost: Optional[int] = None  # aerialLost
 
 
 class PlayerDribbles(BaseModel):
@@ -191,6 +195,18 @@ class PlayerStats(BaseModel):
     @property
     def interceptions(self) -> int:
         return self.tackles.interceptions or 0
+
+    @property
+    def clearances(self) -> int:
+        return self.tackles.clearances or 0
+
+    @property
+    def aerial_duels_won(self) -> int:
+        return self.duels.aerial_won or 0
+
+    @property
+    def accurate_crosses(self) -> int:
+        return self.passes.accurate_crosses or 0
 
     @property
     def defensive_actions(self) -> int:

@@ -3,10 +3,12 @@ soccerdata_client.py — Multi-source data client for EPL TOTW Builder (2025-26 
 
 Data sources:
 - FPL API (fantasy.premierleague.com): Matchweek fixtures, scores, team IDs. No key needed.
-- Understat (via soccerdata): Player match stats — goals, assists, key_passes, minutes, shots, xg.
-- ESPN (via soccerdata): Player lineup — saves, goals_conceded, shots_on_target, formation_place.
+- SofaScore API (api.sofascore.com): All 66 player stats per match — goals, assists, key_passes,
+  minutes, shots, tackles, interceptions, clearances, aerial duels, pass accuracy, rating, xG/xA.
+  Accessed via tls_requests (installed as a soccerdata dependency). Game IDs resolved via
+  soccerdata.Sofascore schedule. Single call per match replaces both Understat + ESPN.
 
-No API key required. soccerdata handles its own caching in ~/soccerdata/data/.
+No API key required. soccerdata handles schedule caching in ~/soccerdata/data/.
 This script adds a second cache layer in data/2025-26/matchweek-{N}/ (same layout as api_football.py).
 
 CLI:
@@ -28,7 +30,6 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -52,17 +53,17 @@ from data_models import (
 # Season / league constants
 # ---------------------------------------------------------------------------
 
-# Understat uses start year: 2025 → 2025-26 season (internally "2526")
-UNDERSTAT_SEASON = 2025
+# SofaScore uses "XXYY" format for season: 2526 = 2025-26
+SOFASCORE_SEASON = "2526"
 
-# ESPN uses end year: 2026 → 2025-26 season (internally "2627")
-ESPN_SEASON = 2026
+# SofaScore API base URL
+SOFASCORE_API_BASE = "https://api.sofascore.com/api/v1"
 
 # FPL API base (no key needed, public)
 FPL_BASE = "https://fantasy.premierleague.com/api"
 
 # ---------------------------------------------------------------------------
-# Team name normalization: FPL / Understat / ESPN → canonical name
+# Team name normalization: FPL / SofaScore → canonical name
 # ---------------------------------------------------------------------------
 
 # FPL team names → canonical
@@ -89,18 +90,21 @@ FPL_TO_CANONICAL: dict[str, str] = {
     "Wolves": "Wolves",
 }
 
-# Understat team names → canonical
-UNDERSTAT_TO_CANONICAL: dict[str, str] = {
+# SofaScore team names → canonical
+SOFASCORE_TO_CANONICAL: dict[str, str] = {
     "Arsenal": "Arsenal",
     "Aston Villa": "Aston Villa",
     "Burnley": "Burnley",
     "Bournemouth": "Bournemouth",
+    "AFC Bournemouth": "Bournemouth",
     "Brentford": "Brentford",
+    "Brighton & Hove Albion": "Brighton",
     "Brighton": "Brighton",
     "Chelsea": "Chelsea",
     "Crystal Palace": "Crystal Palace",
     "Everton": "Everton",
     "Fulham": "Fulham",
+    "Leeds": "Leeds",
     "Leeds United": "Leeds",
     "Liverpool": "Liverpool",
     "Manchester City": "Man City",
@@ -108,39 +112,187 @@ UNDERSTAT_TO_CANONICAL: dict[str, str] = {
     "Newcastle United": "Newcastle",
     "Nottingham Forest": "Nottm Forest",
     "Sunderland": "Sunderland",
-    "Tottenham": "Spurs",
-    "West Ham": "West Ham",
-    "Wolverhampton Wanderers": "Wolves",
-}
-
-# ESPN team names → canonical
-ESPN_TO_CANONICAL: dict[str, str] = {
-    "Arsenal": "Arsenal",
-    "Aston Villa": "Aston Villa",
-    "Burnley": "Burnley",
-    "AFC Bournemouth": "Bournemouth",
-    "Brentford": "Brentford",
-    "Brighton & Hove Albion": "Brighton",
-    "Chelsea": "Chelsea",
-    "Crystal Palace": "Crystal Palace",
-    "Everton": "Everton",
-    "Fulham": "Fulham",
-    "Leeds United": "Leeds",
-    "Liverpool": "Liverpool",
-    "Manchester City": "Man City",
-    "Manchester United": "Man Utd",
-    "Newcastle United": "Newcastle",
-    "Nottingham Forest": "Nottm Forest",
-    "Sunderland AFC": "Sunderland",
     "Tottenham Hotspur": "Spurs",
     "West Ham United": "West Ham",
     "Wolverhampton Wanderers": "Wolves",
+    "Wolverhampton": "Wolves",
+}
+
+# SofaScore position name → API-Football position code (G/D/M/F)
+SOFASCORE_POS_TO_CODE: dict[str, str] = {
+    "Goalkeeper": "G",
+    "Defender": "D",
+    "Midfielder": "M",
+    "Forward": "F",
 }
 
 
 def _normalize_team(name: str, mapping: dict[str, str]) -> str:
     """Map team name to canonical form. Falls back to the original name."""
     return mapping.get(name, name)
+
+
+# ---------------------------------------------------------------------------
+# SofaScore schedule cache (game_id lookup)
+# ---------------------------------------------------------------------------
+
+_sofascore_schedule_cache: Optional[list[dict]] = None
+
+
+def _get_sofascore_schedule() -> list[dict]:
+    """Load SofaScore 2025-26 schedule, cached to data/sofascore_schedule_2526.json."""
+    global _sofascore_schedule_cache
+    if _sofascore_schedule_cache:
+        return _sofascore_schedule_cache
+
+    cache_path = Path(__file__).parent.parent / "data" / "sofascore_schedule_2526.json"
+    cached = load_json_cache(cache_path)
+    if cached:
+        _sofascore_schedule_cache = cached
+        return cached
+
+    print("  [SofaScore] Fetching 2025-26 schedule via soccerdata...")
+    import soccerdata as sd
+    ss = sd.Sofascore(leagues="ENG-Premier League", seasons=SOFASCORE_SEASON)
+    sched = ss.read_schedule().reset_index()
+    records = sched.to_dict(orient="records")
+    # Convert any non-serializable types
+    clean = []
+    for r in records:
+        clean.append({k: (str(v) if hasattr(v, "isoformat") else v) for k, v in r.items()})
+    save_json_cache(cache_path, clean)
+    _sofascore_schedule_cache = clean
+    print(f"  [SofaScore] Schedule loaded: {len(clean)} matches")
+    return clean
+
+
+def _find_sofascore_game_id(home_canonical: str, away_canonical: str, kickoff: str) -> Optional[int]:
+    """Find SofaScore event/game_id by matching canonical team names + date."""
+    schedule = _get_sofascore_schedule()
+    date_prefix = str(kickoff)[:10]
+
+    for row in schedule:
+        ss_home = SOFASCORE_TO_CANONICAL.get(str(row.get("home_team", "")), str(row.get("home_team", "")))
+        ss_away = SOFASCORE_TO_CANONICAL.get(str(row.get("away_team", "")), str(row.get("away_team", "")))
+        ss_date = str(row.get("date", ""))[:10]
+        if ss_home == home_canonical and ss_away == away_canonical and ss_date == date_prefix:
+            return int(row["game_id"])
+    return None
+
+
+# ---------------------------------------------------------------------------
+# SofaScore direct API (tls_requests bypasses 403 from standard urllib)
+# ---------------------------------------------------------------------------
+
+def _sofascore_api_get(path: str) -> dict:
+    """GET a SofaScore API endpoint using tls_requests (required to avoid 403)."""
+    import tls_requests
+    session = tls_requests.Client()
+    url = f"{SOFASCORE_API_BASE}{path}"
+    resp = session.get(url, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.sofascore.com/",
+    })
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _calc_sofascore_minutes(subbed_in: Optional[int], subbed_out: Optional[int],
+                             is_starter: bool) -> int:
+    """Compute minutes played from SofaScore substitution data."""
+    start = subbed_in if subbed_in is not None else (0 if is_starter else None)
+    end = subbed_out if subbed_out is not None else 90
+    if start is None:
+        return 0
+    return max(0, end - start)
+
+
+# SofaScore alpha2 → API-Football country code (British nations use compound codes)
+_SS_COUNTRY_MAP: dict[str, str] = {
+    "EN": "gb-eng",
+    "SC": "gb-sct",
+    "WL": "gb-wls",
+    "NI": "gb-nir",
+    "GB": "gb-eng",   # Generic GB fallback
+}
+
+# SofaScore position code (G/D/M/F) → full name (for SOFASCORE_POS_TO_CODE lookup)
+_SS_POS_TO_NAME: dict[str, str] = {
+    "G": "Goalkeeper",
+    "D": "Defender",
+    "M": "Midfielder",
+    "F": "Forward",
+}
+
+
+def _parse_sofascore_team(team_data: dict, goals_conceded: Optional[int]) -> tuple[str, list[dict]]:
+    """Parse one team's lineups response into (formation_string, [player_stat_dicts])."""
+    formation = team_data.get("formation", "")
+    players_raw = team_data.get("players", [])
+    result = []
+    for entry in players_raw:
+        p = entry.get("player", {})
+        stats = entry.get("statistics", {})
+
+        # position is a single-letter string ("G", "D", "M", "F") at entry level
+        pos_code_raw = entry.get("position") or p.get("position") or "M"
+        pos_name = _SS_POS_TO_NAME.get(str(pos_code_raw), "Midfielder")
+
+        is_starter = not entry.get("substitute", True)
+
+        # Use minutesPlayed from statistics (most reliable)
+        minutes = stats.get("minutesPlayed") or 0
+
+        # Country code: player.country.alpha2 with British nation mapping
+        country_info = p.get("country") or {}
+        raw_alpha2 = str(country_info.get("alpha2", "")).upper()
+        country_code = _SS_COUNTRY_MAP.get(raw_alpha2, raw_alpha2.lower()) if raw_alpha2 else "xx"
+
+        total_pass = stats.get("totalPass", 0) or 0
+        accurate_pass = stats.get("accuratePass", 0) or 0
+        pass_acc = str(round(accurate_pass / total_pass * 100, 1)) if total_pass > 0 else None
+
+        duel_won = stats.get("duelWon", 0) or 0
+        duel_lost = stats.get("duelLost", 0) or 0
+
+        result.append({
+            "player_id":         p.get("id"),
+            "player_name":       p.get("name", ""),
+            "position_name":     pos_name,
+            "position_code":     str(pos_code_raw),
+            "country_code":      country_code,
+            "minutes":           minutes,
+            "is_starter":        is_starter,
+            "goals":             stats.get("goals", 0) or 0,
+            "assists":           stats.get("goalAssist", 0) or 0,
+            "key_passes":        stats.get("keyPass", 0) or 0,
+            "shots_on_target":   stats.get("onTargetScoringAttempt", 0) or 0,
+            "shots_total":       (stats.get("totalShots", 0) or 0),
+            "total_pass":        total_pass,
+            "pass_accuracy":     pass_acc,
+            "accurate_crosses":  stats.get("accurateCross", 0) or 0,
+            "tackles_won":       stats.get("wonTackle", 0) or 0,
+            "interceptions":     stats.get("interceptionWon", 0) or 0,
+            "clearances":        stats.get("totalClearance", 0) or 0,
+            "blocks":            stats.get("outfielderBlock", 0) or 0,
+            "duel_won":          duel_won,
+            "duel_lost":         duel_lost,
+            "duel_total":        duel_won + duel_lost,
+            "aerial_won":        stats.get("aerialWon", 0) or 0,
+            "aerial_lost":       stats.get("aerialLost", 0) or 0,
+            "dribbles_success":  stats.get("wonContest", 0) or 0,
+            "dribbles_attempts": stats.get("totalContest", 0) or 0,
+            "saves":             stats.get("saves", 0) or 0,
+            "goals_conceded":    goals_conceded if str(pos_code_raw) == "G" else None,
+            "yellow_cards":      1 if stats.get("yellowCard") else 0,
+            "red_cards":         1 if stats.get("directRedCard") or stats.get("redCard") else 0,
+            "rating":            stats.get("rating"),   # float e.g. 7.4
+            "xg":                stats.get("expectedGoals"),
+            "xa":                stats.get("expectedAssists"),
+        })
+    return formation, result
 
 
 # ---------------------------------------------------------------------------
@@ -497,339 +649,121 @@ def fetch_fixtures(matchweek: int) -> list[Fixture]:
 
 
 # ---------------------------------------------------------------------------
-# Understat data loading
+# Build Player model from SofaScore parsed dict
 # ---------------------------------------------------------------------------
 
-_understat_client = None
-_understat_schedule = None
-
-
-def _get_understat():
-    global _understat_client
-    if _understat_client is None:
-        import soccerdata as sd
-        _understat_client = sd.Understat(leagues="ENG-Premier League", seasons=UNDERSTAT_SEASON)
-    return _understat_client
-
-
-def _get_understat_schedule():
-    global _understat_schedule
-    if _understat_schedule is None:
-        _understat_schedule = _get_understat().read_schedule()
-    return _understat_schedule
-
-
-def _find_understat_game_id(home_canonical: str, away_canonical: str, kickoff_date: str) -> Optional[int]:
-    """Find Understat game_id by matching canonical team names + date."""
-    sched = _get_understat_schedule()
-    date_prefix = kickoff_date[:10]  # YYYY-MM-DD
-
-    for _, row in sched.iterrows():
-        u_home = UNDERSTAT_TO_CANONICAL.get(row["home_team"], row["home_team"])
-        u_away = UNDERSTAT_TO_CANONICAL.get(row["away_team"], row["away_team"])
-        u_date = str(row["date"])[:10]
-
-        if u_home == home_canonical and u_away == away_canonical and u_date == date_prefix:
-            return int(row["game_id"])
-
-    return None
-
-
-def _fetch_understat_player_stats(game_id: int) -> list[dict]:
-    """Fetch per-player stats from Understat for one game."""
-    u = _get_understat()
-    df = u.read_player_match_stats([game_id])
-
-    players = []
-    for _, row in df.iterrows():
-        players.append({
-            "player_name": row.name[-1] if isinstance(row.name, tuple) else str(row.name),
-            "team": row.name[-2] if isinstance(row.name, tuple) else "",
-            "understat_player_id": int(row.get("player_id", 0)) if row.get("player_id") else None,
-            "position": str(row.get("position", "")),
-            "minutes": int(row.get("minutes", 0)),
-            "goals": int(row.get("goals", 0) or 0),
-            "assists": int(row.get("assists", 0) or 0),
-            "shots": int(row.get("shots", 0) or 0),
-            "key_passes": int(row.get("key_passes", 0) or 0),
-            "xg": float(row.get("xg", 0.0) or 0.0),
-            "xa": float(row.get("xa", 0.0) or 0.0),
-            "yellow_cards": int(row.get("yellow_cards", 0) or 0),
-            "red_cards": int(row.get("red_cards", 0) or 0),
-        })
-    return players
-
-
-# ---------------------------------------------------------------------------
-# ESPN data loading
-# ---------------------------------------------------------------------------
-
-_espn_client = None
-_espn_schedule = None
-
-
-def _get_espn():
-    global _espn_client
-    if _espn_client is None:
-        import soccerdata as sd
-        _espn_client = sd.ESPN(leagues="ENG-Premier League", seasons=ESPN_SEASON)
-    return _espn_client
-
-
-def _get_espn_schedule():
-    global _espn_schedule
-    if _espn_schedule is None:
-        _espn_schedule = _get_espn().read_schedule()
-    return _espn_schedule
-
-
-def _find_espn_game_id(home_canonical: str, away_canonical: str, kickoff_date: str) -> Optional[int]:
-    """Find ESPN game_id by matching canonical team names + date."""
-    sched = _get_espn_schedule()
-    date_prefix = kickoff_date[:10]
-
-    for _, row in sched.iterrows():
-        e_home = ESPN_TO_CANONICAL.get(row["home_team"], row["home_team"])
-        e_away = ESPN_TO_CANONICAL.get(row["away_team"], row["away_team"])
-        e_date = str(row["date"])[:10]
-
-        if e_home == home_canonical and e_away == away_canonical and e_date == date_prefix:
-            return int(row["game_id"])
-
-    return None
-
-
-def _fetch_espn_lineup(game_id: int) -> list[dict]:
-    """Fetch per-player lineup stats from ESPN for one game."""
-    e = _get_espn()
-    df = e.read_lineup([game_id])
-
-    players = []
-    for idx, row in df.iterrows():
-        # idx = (league, season, game, team, player)
-        team = idx[-2] if isinstance(idx, tuple) else ""
-        player_name = idx[-1] if isinstance(idx, tuple) else str(idx)
-
-        sub_in = str(row.get("sub_in", ""))
-        sub_out = str(row.get("sub_out", ""))
-        minutes = _calc_minutes(sub_in, sub_out)
-
-        players.append({
-            "player_name": player_name,
-            "team": team,
-            "position": str(row.get("position", "")),
-            "formation_place": int(row.get("formation_place", 0) or 0),
-            "sub_in": sub_in,
-            "sub_out": sub_out,
-            "minutes": minutes,
-            "is_home": bool(row.get("is_home", False)),
-            "goals": int(row.get("total_goals", 0) or 0),
-            "assists": int(row.get("goal_assists", 0) or 0),
-            "shots_on_target": int(row.get("shots_on_target", 0) or 0),
-            "total_shots": int(row.get("total_shots", 0) or 0),
-            "saves": float(row.get("saves", 0) or 0),
-            "goals_conceded": int(row.get("goals_conceded", 0) or 0),
-            "yellow_cards": int(row.get("yellow_cards", 0) or 0),
-            "red_cards": int(row.get("red_cards", 0) or 0),
-            "fouls_committed": int(row.get("fouls_committed", 0) or 0),
-        })
-    return players
-
-
-def _calc_minutes(sub_in: str, sub_out: str) -> int:
-    """Compute minutes played from ESPN sub_in / sub_out strings."""
-    try:
-        start = 0 if sub_in == "start" else int(sub_in)
-    except (ValueError, TypeError):
-        start = 0
-
-    try:
-        end = 90 if sub_out in ("end", "") else int(sub_out)
-    except (ValueError, TypeError):
-        end = 0
-
-    if start == 0 and end == 0 and sub_in not in ("start",):
-        return 0  # didn't play
-    return max(0, end - start)
-
-
-# ---------------------------------------------------------------------------
-# Position code mapping
-# ---------------------------------------------------------------------------
-
-UNDERSTAT_POS_TO_CODE: dict[str, str] = {
-    "GK": "G", "GKP": "G",
-    "DR": "D", "DL": "D", "DC": "D",
-    "ML": "M", "MR": "M", "MC": "M", "DMC": "M", "AMC": "M",
-    "FW": "F", "FWL": "F", "FWR": "F", "FWC": "F",
-    "": "M",  # unknown → midfielder
-}
-
-ESPN_POS_TO_CODE: dict[str, str] = {
-    "Goalkeeper": "G",
-    "Center Back": "D", "Center Left Defender": "D", "Center Right Defender": "D",
-    "Right Back": "D", "Left Back": "D", "Right Wing Back": "D", "Left Wing Back": "D",
-    "Midfielder": "M", "Center Midfielder": "M", "Defensive Midfielder": "M",
-    "Center Left Midfielder": "M", "Center Right Midfielder": "M",
-    "Attacking Midfielder": "M", "Left Midfielder": "M", "Right Midfielder": "M",
-    "Forward": "F", "Striker": "F", "Left Winger": "F", "Right Winger": "F",
-    "Substitute": "M",  # fallback
-}
-
-ESPN_POS_TO_TACTICAL: dict[str, str] = {
-    "Goalkeeper": "GK",
-    "Center Back": "CB", "Center Left Defender": "CB", "Center Right Defender": "CB",
-    "Right Back": "RB", "Left Back": "LB",
-    "Right Wing Back": "RWB", "Left Wing Back": "LWB",
-    "Defensive Midfielder": "CDM", "Center Midfielder": "CM",
-    "Center Left Midfielder": "CM", "Center Right Midfielder": "CM",
-    "Attacking Midfielder": "CAM", "Left Midfielder": "LM", "Right Midfielder": "RM",
-    "Forward": "ST", "Striker": "ST",
-    "Left Winger": "LW", "Right Winger": "RW",
-    "Substitute": "",
-}
-
-
-# ---------------------------------------------------------------------------
-# Merge Understat + ESPN stats into Player model
-# ---------------------------------------------------------------------------
-
-def _normalize_player_name(name: str) -> str:
-    """Lowercase, strip accents naively for fuzzy matching."""
-    return name.lower().strip()
-
-
-def _build_player(
-    player_name: str,
+def _build_sofascore_player(
+    ss: dict,
     team_canonical: str,
     team_fpl_id: int,
     team_fpl_logo: str,
     fixture_id: int,
     fixture_result: Optional[str],
-    u_stats: Optional[dict],
-    e_stats: Optional[dict],
 ) -> Player:
-    """Merge Understat + ESPN stats into a Player Pydantic model."""
-
-    # Minutes: prefer Understat (more accurate) then ESPN
-    minutes = 0
-    if u_stats:
-        minutes = u_stats.get("minutes", 0)
-    elif e_stats:
-        minutes = e_stats.get("minutes", 0)
-
-    # Position: ESPN position string → tactical code
-    position_code = "M"
-    tactical_position = ""
-    if e_stats:
-        espn_pos = e_stats.get("position", "")
-        position_code = ESPN_POS_TO_CODE.get(espn_pos, "M")
-        tactical_position = ESPN_POS_TO_TACTICAL.get(espn_pos, "")
-    elif u_stats:
-        u_pos = u_stats.get("position", "")
-        position_code = UNDERSTAT_POS_TO_CODE.get(u_pos, "M")
-
-    # Goals, assists — agree between sources, prefer Understat
-    goals = 0
-    assists = 0
-    if u_stats:
-        goals = u_stats.get("goals", 0)
-        assists = u_stats.get("assists", 0)
-    elif e_stats:
-        goals = e_stats.get("goals", 0)
-        assists = e_stats.get("assists", 0)
-
-    # Shots — ESPN has shots_on_target; Understat has total shots
-    shots_total = 0
-    shots_on = 0
-    if u_stats:
-        shots_total = u_stats.get("shots", 0)
-    if e_stats:
-        shots_on = e_stats.get("shots_on_target", 0)
-        if not shots_total:
-            shots_total = e_stats.get("total_shots", 0)
-
-    # Saves and goals_conceded — ESPN only
-    saves = 0
-    goals_conceded = None
-    if e_stats:
-        saves_raw = e_stats.get("saves", 0)
-        saves = int(saves_raw) if saves_raw and str(saves_raw) != "nan" else 0
-        goals_conceded = e_stats.get("goals_conceded", None)
-
-    # Key passes — Understat only
-    key_passes = 0
-    if u_stats:
-        key_passes = u_stats.get("key_passes", 0)
-
-    # Cards — either source
-    yellow = 0
-    red = 0
-    if u_stats:
-        yellow = u_stats.get("yellow_cards", 0)
-        red = u_stats.get("red_cards", 0)
-    elif e_stats:
-        yellow = e_stats.get("yellow_cards", 0)
-        red = e_stats.get("red_cards", 0)
-
-    # Formation place (for lineup)
-    grid_pos = None
-    if e_stats:
-        fp = e_stats.get("formation_place", 0)
-        if fp:
-            grid_pos = f"1:{fp}"  # simplified grid notation
-
-    # Player IDs
-    u_player_id = u_stats.get("understat_player_id") if u_stats else None
-    pid = _player_id(player_name, team_canonical)
+    """Build a Player Pydantic model from a SofaScore player stat dict."""
+    pos_code = SOFASCORE_POS_TO_CODE.get(ss["position_name"], "M")
+    rating_raw = ss.get("rating")
+    rating_str = str(round(float(rating_raw), 1)) if rating_raw else None
 
     stats = PlayerStats(
         games=PlayerGames(
-            minutes=minutes,
-            position=position_code,
-            rating=None,
+            minutes=ss["minutes"],
+            position=pos_code,
+            rating=rating_str,
             captain=False,
         ),
         goals=PlayerGoals(
-            total=goals,
-            conceded=goals_conceded,
-            assists=assists,
-            saves=saves if position_code == "G" else None,
+            total=ss["goals"],
+            conceded=ss.get("goals_conceded"),
+            assists=ss["assists"],
+            saves=ss["saves"] if pos_code == "G" else None,
         ),
         shots=PlayerShots(
-            total=shots_total,
-            on=shots_on,
+            total=ss["shots_total"],
+            on=ss["shots_on_target"],
         ),
         passes=PlayerPasses(
-            total=None,
-            key=key_passes,
-            accuracy=None,
+            total=ss["total_pass"],
+            key=ss["key_passes"],
+            accuracy=ss["pass_accuracy"],
+            accurate_crosses=ss["accurate_crosses"],
         ),
         tackles=PlayerTackles(
-            total=None,
-            blocks=None,
-            interceptions=None,
+            total=ss["tackles_won"],
+            blocks=ss["blocks"],
+            interceptions=ss["interceptions"],
+            clearances=ss["clearances"],
         ),
-        duels=PlayerDuels(total=None, won=None),
-        dribbles=PlayerDribbles(attempts=None, success=None),
-        cards=PlayerCards(yellow=yellow, red=red),
+        duels=PlayerDuels(
+            total=ss["duel_total"],
+            won=ss["duel_won"],
+            aerial_won=ss["aerial_won"],
+            aerial_lost=ss["aerial_lost"],
+        ),
+        dribbles=PlayerDribbles(
+            attempts=ss["dribbles_attempts"],
+            success=ss["dribbles_success"],
+        ),
+        cards=PlayerCards(
+            yellow=ss["yellow_cards"],
+            red=ss["red_cards"],
+        ),
     )
 
+    # Use SofaScore country code directly; fall back to FootballTransfers if missing
+    country_code = ss.get("country_code") or ""
+    if not country_code or country_code == "xx":
+        country_code = _player_country_code(ss["player_name"])
+
     return Player(
-        player_id=pid,
-        name=player_name,
-        photo=_player_photo_url(player_name, team_fpl_id, u_player_id, team_canonical),
+        player_id=_player_id(ss["player_name"], team_canonical),
+        name=ss["player_name"],
+        photo=_player_photo_url(ss["player_name"], team_fpl_id, None, team_canonical),
         team_id=team_fpl_id,
         team_name=team_canonical,
         team_logo=team_fpl_logo,
         nationality="",
-        country_code=_player_country_code(player_name),
-        position_code=position_code,
-        grid_position=grid_pos,
+        country_code=country_code,
+        position_code=pos_code,
+        grid_position=ss.get("position_code") or None,
         stats=stats,
         fixture_id=fixture_id,
         fixture_result=fixture_result,
     )
+
+
+def _sofascore_lineup_to_cache_format(
+    fixture: Fixture,
+    home_form: str,
+    away_form: str,
+    home_players: list[dict],
+    away_players: list[dict],
+) -> list[dict]:
+    """Convert SofaScore lineup data to API-Football lineups_{id}.json format."""
+    result = []
+    for side, form, players, team in [
+        ("home", home_form, home_players, fixture.home_team),
+        ("away", away_form, away_players, fixture.away_team),
+    ]:
+        starters = [p for p in players if p.get("is_starter")]
+        start_xi = []
+        for i, p in enumerate(starters, 1):
+            pos_code = SOFASCORE_POS_TO_CODE.get(p["position_name"], "M")
+            start_xi.append({
+                "player": {
+                    "id": _player_id(p["player_name"], team.name),
+                    "name": p["player_name"],
+                    "pos": pos_code,
+                    "grid": f"1:{i}",
+                }
+            })
+        result.append({
+            "team": {"id": team.id, "name": team.name},
+            "formation": form,
+            "startXI": start_xi,
+            "substitutes": [],
+        })
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -856,103 +790,76 @@ def fetch_players(matchweek: int, only_fixture_ids: Optional[list[int]] = None) 
             result[fixture.fixture_id] = []
             continue
 
-        cache_path = data_dir / f"players_{fixture.fixture_id}.json"
-        if cache_exists(cache_path):
+        players_cache = data_dir / f"players_{fixture.fixture_id}.json"
+        lineups_cache = data_dir / f"lineups_{fixture.fixture_id}.json"
+
+        if cache_exists(players_cache):
             print(f"  [Cache] Players already cached for fixture {fixture.fixture_id}")
             result[fixture.fixture_id] = []  # downstream reads directly from file
             continue
 
         home_canonical = FPL_TO_CANONICAL.get(fixture.home_team.name, fixture.home_team.name)
         away_canonical = FPL_TO_CANONICAL.get(fixture.away_team.name, fixture.away_team.name)
-        kickoff = fixture.date
 
         print(f"  [Fetch] {fixture.home_team.name} vs {fixture.away_team.name} (fixture {fixture.fixture_id})")
 
-        # --- Fetch Understat + ESPN in parallel ---
-        u_game_id = _find_understat_game_id(home_canonical, away_canonical, kickoff)
-        e_game_id = _find_espn_game_id(home_canonical, away_canonical, kickoff)
+        ss_game_id = _find_sofascore_game_id(home_canonical, away_canonical, fixture.date)
+        if not ss_game_id:
+            print(f"    [SofaScore] No game_id found for {home_canonical} vs {away_canonical} on {fixture.date[:10]}")
+            result[fixture.fixture_id] = []
+            continue
 
-        u_players: dict[str, dict] = {}
-        e_players: dict[str, dict] = {}
+        try:
+            data = _sofascore_api_get(f"/event/{ss_game_id}/lineups")
+        except Exception as ex:
+            print(f"    [SofaScore] API error for game_id={ss_game_id}: {ex}")
+            result[fixture.fixture_id] = []
+            continue
 
-        def _fetch_u():
-            if not u_game_id:
-                return []
-            return _fetch_understat_player_stats(u_game_id)
+        # Scores for goals_conceded calculation
+        home_score = fixture.score.home if fixture.score.home is not None else 0
+        away_score = fixture.score.away if fixture.score.away is not None else 0
 
-        def _fetch_e():
-            if not e_game_id:
-                return []
-            return _fetch_espn_lineup(e_game_id)
+        home_form, home_ss = _parse_sofascore_team(data.get("home", {}), away_score)
+        away_form, away_ss = _parse_sofascore_team(data.get("away", {}), home_score)
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            fu = pool.submit(_fetch_u)
-            fe = pool.submit(_fetch_e)
-            try:
-                u_raw = fu.result(timeout=60)
-                print(f"    [Understat] game_id={u_game_id} → {len(u_raw)} players") if u_game_id else print(f"    [Understat] No match: {home_canonical} vs {away_canonical}")
-                for p in u_raw:
-                    u_players[_normalize_player_name(p["player_name"])] = p
-            except Exception as ex:
-                print(f"    [Understat] Error: {ex}")
-            try:
-                e_raw = fe.result(timeout=60)
-                print(f"    [ESPN] game_id={e_game_id} → {len(e_raw)} players") if e_game_id else print(f"    [ESPN] No match: {home_canonical} vs {away_canonical}")
-                for p in e_raw:
-                    if p.get("formation_place", 0) == 0 and p.get("minutes", 0) == 0:
-                        continue
-                    e_players[_normalize_player_name(p["player_name"])] = p
-            except Exception as ex:
-                print(f"    [ESPN] Error: {ex}")
+        print(f"    [SofaScore] game_id={ss_game_id} → {len(home_ss)} home + {len(away_ss)} away players | {home_form} vs {away_form}")
 
-        # --- Merge into Player objects ---
+        # Build Player objects (both teams combined)
         fixture_result = fixture.result
-        all_names: set[str] = set(u_players.keys()) | set(e_players.keys())
+        home_fpl_id, home_logo = _canonical_to_fpl_id_logo(home_canonical)
+        away_fpl_id, away_logo = _canonical_to_fpl_id_logo(away_canonical)
 
         players: list[Player] = []
-        for norm_name in sorted(all_names):
-            u = u_players.get(norm_name)
-            e = e_players.get(norm_name)
+        for ss_entry, team_canonical, fpl_id, logo in [
+            *[(p, home_canonical, home_fpl_id, home_logo) for p in home_ss],
+            *[(p, away_canonical, away_fpl_id, away_logo) for p in away_ss],
+        ]:
+            if ss_entry["minutes"] > 0:
+                players.append(_build_sofascore_player(
+                    ss=ss_entry,
+                    team_canonical=team_canonical,
+                    team_fpl_id=fpl_id,
+                    team_fpl_logo=logo,
+                    fixture_id=fixture.fixture_id,
+                    fixture_result=fixture_result,
+                ))
 
-            # Determine team
-            if e:
-                raw_team = e.get("team", "")
-                team_canonical = ESPN_TO_CANONICAL.get(raw_team, raw_team)
-            elif u:
-                raw_team = u.get("team", "")
-                team_canonical = UNDERSTAT_TO_CANONICAL.get(raw_team, raw_team)
-            else:
-                continue
-
-            # Get FPL team ID + logo for this team
-            fpl_id, logo = _canonical_to_fpl_id_logo(team_canonical)
-
-            # Original (non-normalized) name: prefer ESPN then Understat
-            orig_name = e["player_name"] if e else u["player_name"]
-
-            p = _build_player(
-                player_name=orig_name,
-                team_canonical=team_canonical,
-                team_fpl_id=fpl_id,
-                team_fpl_logo=logo,
-                fixture_id=fixture.fixture_id,
-                fixture_result=fixture_result,
-                u_stats=u,
-                e_stats=e,
-            )
-
-            # Only keep players who played (minutes > 0)
-            if p.stats.minutes_played > 0:
-                players.append(p)
-
-        # Save in API-Football-compatible format
+        # Save players cache
         af_format = _players_to_api_football_format(players, fixture)
-        players = _deduplicate_players(players)
-        af_format = _players_to_api_football_format(players, fixture)
-        save_json_cache(cache_path, af_format)
+        save_json_cache(players_cache, af_format)
         print(f"    [Cache] Saved {len(players)} players for fixture {fixture.fixture_id}")
+
+        # Save lineups cache (from same SofaScore response — no extra API call)
+        if not cache_exists(lineups_cache):
+            lineup_data = _sofascore_lineup_to_cache_format(
+                fixture, home_form, away_form, home_ss, away_ss
+            )
+            save_json_cache(lineups_cache, lineup_data)
+            print(f"    [Cache] Saved lineups for fixture {fixture.fixture_id} ({home_form} vs {away_form})")
+
         result[fixture.fixture_id] = players
-        time.sleep(0.5)  # brief pause between fixtures
+        time.sleep(1.0)  # polite rate limiting for SofaScore
 
     return result
 
@@ -1053,9 +960,24 @@ def _players_to_api_football_format(players: list[Player], fixture: Fixture) -> 
                         "saves": s.goals.saves,
                     },
                     "shots": {"total": s.shots.total, "on": s.shots.on},
-                    "passes": {"total": s.passes.total, "key": s.passes.key, "accuracy": s.passes.accuracy},
-                    "tackles": {"total": s.tackles.total, "blocks": s.tackles.blocks, "interceptions": s.tackles.interceptions},
-                    "duels": {"total": s.duels.total, "won": s.duels.won},
+                    "passes": {
+                        "total": s.passes.total,
+                        "key": s.passes.key,
+                        "accuracy": s.passes.accuracy,
+                        "accurate_crosses": s.passes.accurate_crosses,
+                    },
+                    "tackles": {
+                        "total": s.tackles.total,
+                        "blocks": s.tackles.blocks,
+                        "interceptions": s.tackles.interceptions,
+                        "clearances": s.tackles.clearances,
+                    },
+                    "duels": {
+                        "total": s.duels.total,
+                        "won": s.duels.won,
+                        "aerial_won": s.duels.aerial_won,
+                        "aerial_lost": s.duels.aerial_lost,
+                    },
                     "dribbles": {"attempts": s.dribbles.attempts, "success": s.dribbles.success},
                     "cards": {"yellow": s.cards.yellow, "red": s.cards.red},
                     "penalty": {"won": None, "committed": None, "scored": None, "missed": None, "saved": None},
@@ -1082,8 +1004,9 @@ def _canonical_to_fpl_id_logo(canonical: str) -> tuple[int, str]:
 def fetch_lineups(matchweek: int, only_fixture_ids: Optional[list[int]] = None) -> dict[int, dict]:
     """
     Fetch lineup / formation data for all (or a subset of) fixtures in a matchweek.
-    Formation is inferred from ESPN formation_place + position data.
-    Caches to lineups_{fixture_id}.json.
+    With SofaScore, lineups are written by fetch_players in the same API call.
+    If lineups_{id}.json is missing, delegates to fetch_players for that fixture.
+    Caches to lineups_{fixture_id}.json (API-Football format).
     Pass only_fixture_ids to restrict fetching to those IDs (used by parallel agents).
     """
     fixtures = fetch_fixtures(matchweek)
@@ -1093,6 +1016,7 @@ def fetch_lineups(matchweek: int, only_fixture_ids: Optional[list[int]] = None) 
     data_dir = matchweek_data_dir(matchweek)
     result: dict[int, dict] = {}
 
+    missing_fixture_ids: list[int] = []
     for fixture in fixtures:
         if not fixture.is_complete:
             result[fixture.fixture_id] = {}
@@ -1102,100 +1026,21 @@ def fetch_lineups(matchweek: int, only_fixture_ids: Optional[list[int]] = None) 
         if cache_exists(cache_path):
             print(f"  [Cache] Loading lineups for fixture {fixture.fixture_id}")
             result[fixture.fixture_id] = load_json_cache(cache_path)
-            continue
-
-        home_canonical = FPL_TO_CANONICAL.get(fixture.home_team.name, fixture.home_team.name)
-        away_canonical = FPL_TO_CANONICAL.get(fixture.away_team.name, fixture.away_team.name)
-
-        e_game_id = _find_espn_game_id(home_canonical, away_canonical, fixture.date)
-        if not e_game_id:
-            print(f"  [ESPN] No lineup found for fixture {fixture.fixture_id}")
-            result[fixture.fixture_id] = {}
-            continue
-
-        print(f"  [Lineup] {fixture.home_team.name} vs {fixture.away_team.name} (ESPN id={e_game_id})")
-        try:
-            espn_players = _fetch_espn_lineup(e_game_id)
-        except Exception as ex:
-            print(f"  [ESPN] Lineup error: {ex}")
-            result[fixture.fixture_id] = {}
-            continue
-
-        # Build lineup per team
-        lineup: dict[str, dict] = {
-            "fixture_id": fixture.fixture_id,
-            "home_team": {"name": fixture.home_team.name, "formation": "", "starters": []},
-            "away_team": {"name": fixture.away_team.name, "formation": "", "starters": []},
-        }
-
-        home_starters = [p for p in espn_players if p["is_home"] and p["formation_place"] > 0]
-        away_starters = [p for p in espn_players if not p["is_home"] and p["formation_place"] > 0]
-
-        lineup["home_team"]["formation"] = _infer_formation(home_starters)
-        lineup["home_team"]["starters"] = home_starters
-        lineup["away_team"]["formation"] = _infer_formation(away_starters)
-        lineup["away_team"]["starters"] = away_starters
-
-        # Convert to API-Football lineup format
-        af_lineup = _lineup_to_api_football_format(lineup, fixture)
-        save_json_cache(cache_path, af_lineup)
-        result[fixture.fixture_id] = lineup
-        time.sleep(0.5)
-
-    return result
-
-
-def _lineup_to_api_football_format(lineup: dict, fixture: Fixture) -> list[dict]:
-    """Convert lineup dict to API-Football lineups response format."""
-    result = []
-    for side in ("home_team", "away_team"):
-        team_data = lineup.get(side, {})
-        starters = team_data.get("starters", [])
-        team_name = team_data.get("name", "")
-        formation = team_data.get("formation", "4-3-3")
-
-        if side == "home_team":
-            team_id = fixture.home_team.id
         else:
-            team_id = fixture.away_team.id
+            missing_fixture_ids.append(fixture.fixture_id)
 
-        start_xi = []
-        for i, p in enumerate(starters, 1):
-            espn_pos = p.get("position", "")
-            pos_code = ESPN_POS_TO_CODE.get(espn_pos, "M")
-            tactical = ESPN_POS_TO_TACTICAL.get(espn_pos, "M")
-            fp = p.get("formation_place", i)
-            start_xi.append({
-                "player": {
-                    "id": _player_id(p["player_name"], team_name),
-                    "name": p["player_name"],
-                    "pos": pos_code,
-                    "grid": f"1:{fp}",
-                }
-            })
-
-        result.append({
-            "team": {"id": team_id, "name": team_name},
-            "formation": formation,
-            "startXI": start_xi,
-            "substitutes": [],
-        })
+    if missing_fixture_ids:
+        print(f"  [Lineups] {len(missing_fixture_ids)} fixtures missing lineups — fetching via SofaScore...")
+        fetch_players(matchweek, only_fixture_ids=missing_fixture_ids)
+        # Now read from cache
+        for fid in missing_fixture_ids:
+            cache_path = data_dir / f"lineups_{fid}.json"
+            if cache_exists(cache_path):
+                result[fid] = load_json_cache(cache_path)
+            else:
+                result[fid] = {}
 
     return result
-
-
-def _infer_formation(starters: list[dict]) -> str:
-    """
-    Infer formation string (e.g. '4-3-3') from ESPN starters' positions.
-    Counts defenders, midfielders, forwards.
-    """
-    n_def = sum(1 for p in starters if ESPN_POS_TO_CODE.get(p.get("position", ""), "") == "D")
-    n_mid = sum(1 for p in starters if ESPN_POS_TO_CODE.get(p.get("position", ""), "") == "M")
-    n_fwd = sum(1 for p in starters if ESPN_POS_TO_CODE.get(p.get("position", ""), "") == "F")
-
-    if n_def + n_mid + n_fwd == 10:  # excluding GK
-        return f"{n_def}-{n_mid}-{n_fwd}"
-    return "4-3-3"  # fallback
 
 
 # ---------------------------------------------------------------------------
@@ -1203,11 +1048,10 @@ def _infer_formation(starters: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 def cmd_check_budget():
-    print("FPL API + soccerdata (Understat + ESPN): no daily rate limit.")
+    print("FPL API + SofaScore: no daily rate limit.")
     print("FPL API: public, no key needed.")
-    print("Understat: web scraping with built-in rate limiting.")
-    print("ESPN: web scraping with built-in rate limiting.")
-    print("soccerdata caches to ~/soccerdata/data/ automatically.")
+    print("SofaScore: direct API via tls_requests (1 call per fixture, ~1s delay).")
+    print("soccerdata.Sofascore: schedule only, cached to data/sofascore_schedule_2526.json.")
     print("Project cache: data/2025-26/matchweek-{N}/")
 
 

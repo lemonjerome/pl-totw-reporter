@@ -58,20 +58,21 @@ def score_gk(p: Player) -> tuple:
 
 
 def score_cb(p: Player) -> tuple:
-    """CB: tackles + interceptions + blocks, then rating."""
+    """CB: tackles + interceptions + clearances, then aerial duels, then rating."""
     tackles = p.stats.tackles_won
     intercepts = p.stats.interceptions
+    clearances = p.stats.clearances
     blocks = p.stats.tackles.blocks or 0
-    duels = p.stats.duels_won
+    aerial = p.stats.aerial_duels_won + p.stats.duels_won
     rating = p.stats.rating_float
-    return (tackles + intercepts, blocks, duels, rating)
+    return (tackles + intercepts + clearances, blocks, aerial, rating)
 
 
 def score_fb(p: Player) -> tuple:
-    """RB/LB: defensive actions + attacking contribution."""
+    """RB/LB: defensive actions + attacking contribution + aerial duels."""
     defensive = p.stats.defensive_actions
     attacking = p.stats.key_passes + (p.stats.assists * 2)  # assists weighted
-    dribbles = p.stats.dribbles_completed
+    dribbles = p.stats.dribbles_completed + p.stats.aerial_duels_won
     rating = p.stats.rating_float
     return (defensive, attacking, dribbles, rating)
 
@@ -85,13 +86,14 @@ def score_wb(p: Player) -> tuple:
 
 
 def score_cdm(p: Player) -> tuple:
-    """CDM: tackles + interceptions primary."""
+    """CDM: tackles + interceptions primary, clearances + duels secondary."""
     tackles = p.stats.tackles_won
     intercepts = p.stats.interceptions
+    clearances = p.stats.clearances
     duels = p.stats.duels_won
     pass_acc = p.stats.pass_accuracy
     rating = p.stats.rating_float
-    return (tackles + intercepts, duels, pass_acc, rating)
+    return (tackles + intercepts, clearances + duels, pass_acc, rating)
 
 
 def score_cm(p: Player) -> tuple:
@@ -222,15 +224,19 @@ def _parse_player_from_cache(
             total=passes_raw.get("total"),
             key=passes_raw.get("key"),
             accuracy=str(passes_raw["accuracy"]) if passes_raw.get("accuracy") is not None else None,
+            accurate_crosses=passes_raw.get("accurate_crosses"),
         ),
         tackles=PlayerTackles(
             total=tackles_raw.get("total"),
             blocks=tackles_raw.get("blocks"),
             interceptions=tackles_raw.get("interceptions"),
+            clearances=tackles_raw.get("clearances"),
         ),
         duels=PlayerDuels(
             total=duels_raw.get("total"),
             won=duels_raw.get("won"),
+            aerial_won=duels_raw.get("aerial_won"),
+            aerial_lost=duels_raw.get("aerial_lost"),
         ),
         dribbles=PlayerDribbles(
             attempts=dribbles_raw.get("attempts"),
