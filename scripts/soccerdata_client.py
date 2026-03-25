@@ -15,6 +15,8 @@ CLI:
   python scripts/soccerdata_client.py fetch-round 28
   python scripts/soccerdata_client.py fetch-players 28
   python scripts/soccerdata_client.py fetch-lineups 28
+  python scripts/soccerdata_client.py fetch-players-subset 28 id1 id2 id3 ...
+  python scripts/soccerdata_client.py fetch-lineups-subset 28 id1 id2 id3 ...
 """
 
 from __future__ import annotations
@@ -834,13 +836,17 @@ def _build_player(
 # Fetch and cache player stats for a matchweek
 # ---------------------------------------------------------------------------
 
-def fetch_players(matchweek: int) -> dict[int, list[Player]]:
+def fetch_players(matchweek: int, only_fixture_ids: Optional[list[int]] = None) -> dict[int, list[Player]]:
     """
-    Fetch player stats for all fixtures in a matchweek.
+    Fetch player stats for all (or a subset of) fixtures in a matchweek.
     Returns {fixture_id: [Player, ...]}
     Caches each fixture to players_{fixture_id}.json.
+    Pass only_fixture_ids to restrict fetching to those IDs (used by parallel agents).
     """
     fixtures = fetch_fixtures(matchweek)
+    if only_fixture_ids is not None:
+        id_set = set(only_fixture_ids)
+        fixtures = [f for f in fixtures if f.fixture_id in id_set]
     data_dir = matchweek_data_dir(matchweek)
     result: dict[int, list[Player]] = {}
 
@@ -1073,13 +1079,17 @@ def _canonical_to_fpl_id_logo(canonical: str) -> tuple[int, str]:
 # Fetch and cache lineups for a matchweek
 # ---------------------------------------------------------------------------
 
-def fetch_lineups(matchweek: int) -> dict[int, dict]:
+def fetch_lineups(matchweek: int, only_fixture_ids: Optional[list[int]] = None) -> dict[int, dict]:
     """
-    Fetch lineup / formation data for all fixtures in a matchweek.
+    Fetch lineup / formation data for all (or a subset of) fixtures in a matchweek.
     Formation is inferred from ESPN formation_place + position data.
     Caches to lineups_{fixture_id}.json.
+    Pass only_fixture_ids to restrict fetching to those IDs (used by parallel agents).
     """
     fixtures = fetch_fixtures(matchweek)
+    if only_fixture_ids is not None:
+        id_set = set(only_fixture_ids)
+        fixtures = [f for f in fixtures if f.fixture_id in id_set]
     data_dir = matchweek_data_dir(matchweek)
     result: dict[int, dict] = {}
 
@@ -1252,6 +1262,21 @@ def cmd_fetch_lineups(matchweek: int):
             print(f"  [{fid}] No lineup data")
 
 
+def cmd_fetch_players_subset(matchweek: int, fixture_ids: list[int]):
+    """Fetch player stats for a specific subset of fixture IDs (used by parallel agents)."""
+    print(f"\nAgent fetching player stats for fixtures: {fixture_ids}")
+    result = fetch_players(matchweek, only_fixture_ids=fixture_ids)
+    total = sum(len(v) for v in result.values())
+    print(f"\nSubset complete — fixtures: {fixture_ids}, total players cached: {total}")
+
+
+def cmd_fetch_lineups_subset(matchweek: int, fixture_ids: list[int]):
+    """Fetch lineup/formation data for a specific subset of fixture IDs (used by parallel agents)."""
+    print(f"\nAgent fetching lineups for fixtures: {fixture_ids}")
+    fetch_lineups(matchweek, only_fixture_ids=fixture_ids)
+    print(f"\nLineup subset complete for fixtures: {fixture_ids}")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -1277,6 +1302,14 @@ if __name__ == "__main__":
     elif command == "fetch-lineups":
         matchweek = int(sys.argv[2])
         cmd_fetch_lineups(matchweek)
+    elif command == "fetch-players-subset":
+        matchweek = int(sys.argv[2])
+        fixture_ids = [int(x) for x in sys.argv[3:]]
+        cmd_fetch_players_subset(matchweek, fixture_ids)
+    elif command == "fetch-lineups-subset":
+        matchweek = int(sys.argv[2])
+        fixture_ids = [int(x) for x in sys.argv[3:]]
+        cmd_fetch_lineups_subset(matchweek, fixture_ids)
     else:
         print(f"Unknown command: {command}")
         print(__doc__)

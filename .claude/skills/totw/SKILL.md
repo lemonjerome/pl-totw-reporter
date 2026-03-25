@@ -12,32 +12,27 @@ Build the TOTW for the specified matchweek (or auto-detect current if not specif
 Examples:
 - `/totw 30` — Build TOTW for Matchweek 30
 - `/totw` — Build TOTW for the latest completed matchweek
-- `What is the EPL TOTW for Matchday 30?` — Also triggers this skill
 
 ## Step 1: Parse the Request
 
 Extract the matchweek number from the user's message:
 - Explicit: "matchweek 30", "matchday 20", "MW30", "gameweek 15"
-- Implicit "current": detect from API
-- Relative: "last week" = current matchweek - 1, "this week" = current matchweek
-
-If no matchweek is specified, use the researcher agent to call:
-```
-python scripts/api_football.py get-current-round
-```
+- If no matchweek is specified, run:
+  ```bash
+  python3 scripts/soccerdata_client.py check-status 31
+  ```
+  And step down until you find the most recently completed matchweek.
 
 ## Step 2: Check Matchweek Status
 
-Use the researcher agent to check fixture statuses:
-```
-python scripts/api_football.py check-status {N}
+```bash
+python3 scripts/soccerdata_client.py check-status {N}
 ```
 
 ### If COMPLETE (all FT/AET/PEN):
 Proceed to Step 3.
 
 ### If INCOMPLETE (some matches still to play):
-Inform the user:
 ```
 ⚠️ Matchweek {N} is not yet complete.
 
@@ -51,62 +46,82 @@ Would you like the TOTW for the previous matchweek (Matchweek {N-1}) instead?
 ```
 Stop and wait for user response.
 
-### If FUTURE (all NS, hasn't started):
-Inform the user:
+### If FUTURE (all NS):
 ```
-📅 Matchweek {N} hasn't started yet.
-
-Upcoming fixtures:
-- [List all scheduled matches with dates/times]
-
-The matchweek begins on {date}.
-
+📅 Matchweek {N} hasn't started yet. It begins on {date}.
 Would you like the TOTW for the most recently completed matchweek instead?
 ```
 Stop and wait for user response.
 
-## Step 3: Research Phase
+## Step 3: Research Phase — 3 Parallel Fetcher Agents
+
+**3a. Fetch fixtures (sequential, fast):**
+```bash
+python3 scripts/soccerdata_client.py fetch-round {N}
+```
+
+Read `data/2025-26/matchweek-{N}/fixtures.json` and extract all fixture IDs.
+
+**3b. Split into 3 groups:**
+- Agent 1: indices 0–3 (4 fixtures)
+- Agent 2: indices 4–6 (3 fixtures)
+- Agent 3: indices 7–9 (3 fixtures)
+
+**3c. Spawn all 3 `researcher-fetcher` agents in a SINGLE message (parallel):**
+
+Agent 1 prompt: `Matchweek: {N}. Your fixture IDs: {id1} {id2} {id3} {id4} — run fetch-players-subset and fetch-lineups-subset for these IDs from /Users/gabrielramos/Desktop/PL-team-builder`
+
+Agent 2 prompt: `Matchweek: {N}. Your fixture IDs: {id5} {id6} {id7} — run fetch-players-subset and fetch-lineups-subset for these IDs from /Users/gabrielramos/Desktop/PL-team-builder`
+
+Agent 3 prompt: `Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10} — run fetch-players-subset and fetch-lineups-subset for these IDs from /Users/gabrielramos/Desktop/PL-team-builder`
+
+Wait for all 3 to complete.
+
+**3d. Scrape match reports and commentaries:**
+```bash
+python3 scripts/pl_scraper.py match-reports {N}
+python3 scripts/pl_scraper.py commentaries {N}
+```
+Failures are non-blocking.
+
+## Step 4: Analysis Phase — Single Researcher Agent
 
 Delegate to the **researcher** agent:
 
-"Please collect all matchweek {N} data. Run the following:
-1. `python scripts/api_football.py fetch-round {N}` — get all fixtures
-2. `python scripts/api_football.py fetch-players {fixture_id}` — repeat for each fixture
-3. `python scripts/pl_scraper.py match-reports {N}` — scrape match reports
-4. `python scripts/pl_scraper.py commentaries {N}` — scrape commentaries
+"Analyze matchweek {N} data:
+1. `python3 scripts/formation_analyzer.py {N}` — select best formation
+2. `python3 scripts/player_evaluator.py {N}` — select top players per position
+3. `python3 scripts/report_generator.py {N}` — generate synthesis reports
 
-Verify all data is saved to `data/2025-26/matchweek-{N}/`."
+Confirm formation selected and list the 11 players chosen."
 
-## Step 4: Analysis Phase
-
-Delegate to the **researcher** agent:
-
-"Now analyze the matchweek {N} data:
-1. `python scripts/formation_analyzer.py {N}` — select best formation
-2. `python scripts/player_evaluator.py {N}` — select top players per position
-3. `python scripts/report_generator.py {N}` — generate synthesis reports
-
-Confirm what formation was selected and list the 11 players chosen."
-
-After the researcher reports back, display the selected team to the user:
+After the researcher reports back, display to the user:
 ```
 🏆 Premier League Team of the Week — Matchweek {N}
 
 Formation: {formation}
 
-11: {GK name} (GK, {Club})
-2: {RB name} (RB, {Club})
-...
+GK: {name} ({Club})
+RB: {name} ({Club})
+CB: {name} ({Club})
+CB: {name} ({Club})
+LB: {name} ({Club})
+CDM: {name} ({Club})
+CM: {name} ({Club})
+CM: {name} ({Club})
+RW: {name} ({Club})
+ST: {name} ({Club})
+LW: {name} ({Club})
 ```
 
-## Step 5: Visualization Phase
+## Step 5: Visualization Phase — Single Visualizer Agent
 
 Delegate to the **visualizer** agent:
 
 "Generate the TOTW team diagram for matchweek {N}:
-`python scripts/diagram_renderer.py {N}`
+`python3 scripts/diagram_renderer.py {N}`
 
-Confirm the PNG was created at `output/matchweek-{N}/totw-diagram.png`."
+Confirm the PNG was created at `output/matchweek-{N}/totw_diagram.png`."
 
 ## Step 6: Presentation Phase
 
@@ -119,18 +134,17 @@ Delegate to the **visualizer** agent:
 Delegate to the **visualizer** agent:
 
 "Send the TOTW email for matchweek {N}:
-1. `python scripts/compose_email.py {N}` — generate email HTML
+1. `python3 scripts/compose_email.py {N}` — generate email HTML
 2. Use Gmail MCP to send: from 24hrnts@gmail.com to 20gabramos04@gmail.com
 3. Attach `output/matchweek-{N}/totw-presentation.pdf`"
 
 ## Step 8: Confirmation
 
-Report back to the user:
 ```
 ✅ Premier League TOTW — Matchweek {N} Complete!
 
 📊 Team: {Formation} — {list key players briefly}
-🖼️  Diagram: output/matchweek-{N}/totw-diagram.png
+🖼️  Diagram: output/matchweek-{N}/totw_diagram.png
 📑 Slides: output/matchweek-{N}/totw-presentation.pdf
 📧 Email sent to 20gabramos04@gmail.com
 ```

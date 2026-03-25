@@ -3,9 +3,9 @@ name: research
 description: Fetch all Premier League matchweek data from soccerdata (FPL + Understat + ESPN) and scrape the PL website for match reports and commentaries. Run before analyze. Usage: /research [matchweek_number]
 ---
 
-# Research — Data Collection for Matchweek
+# Research — Parallel Data Collection for Matchweek
 
-Collect all data for matchweek $ARGUMENTS from soccerdata sources and the PL website.
+Collect all data for matchweek $ARGUMENTS from soccerdata sources using 3 parallel fetcher agents.
 
 ## Prerequisites
 
@@ -17,84 +17,89 @@ ls scripts/soccerdata_client.py scripts/pl_scraper.py
 ## Step 1: Check Fixture Status
 
 ```bash
-python scripts/soccerdata_client.py check-status $ARGUMENTS
+python3 scripts/soccerdata_client.py check-status $ARGUMENTS
 ```
 
-Verify all 10 fixtures are complete (status `FT`). If any are `NS` or in-progress, inform the user and do not proceed.
+Verify all fixtures are complete (status `FT`). If any are `NS` or in-progress, inform the user and do not proceed.
 
-## Step 2: Fetch Fixtures
+## Step 2: Fetch Fixtures (Sequential — fast)
 
 ```bash
-python scripts/soccerdata_client.py fetch-round $ARGUMENTS
+python3 scripts/soccerdata_client.py fetch-round $ARGUMENTS
 ```
 
-This will:
-- Fetch fixtures from the FPL API for the matchweek
-- Save to `data/2025-26/matchweek-{N}/fixtures.json` in API-Football-compatible format
-- Return: list of fixture IDs and their statuses
+Fetches all fixtures from the FPL API and saves to `data/2025-26/matchweek-{N}/fixtures.json`.
 
-Verify all 10 fixtures are returned. If a fixture has status `PST` (postponed), note it.
+After this completes, read `data/2025-26/matchweek-$ARGUMENTS/fixtures.json` and extract all fixture IDs from the `"fixture"."id"` field of each element in the JSON array.
 
-## Step 3: Fetch Player Stats
+## Step 3: Split Fixtures into 3 Groups
+
+Divide the fixture IDs into 3 roughly equal groups:
+- **Agent 1**: first ~4 fixture IDs (indices 0–3)
+- **Agent 2**: next ~3 fixture IDs (indices 4–6)
+- **Agent 3**: remaining fixture IDs (indices 7–9)
+
+## Step 4: Launch 3 Parallel Fetcher Agents
+
+**CRITICAL**: Spawn all 3 `researcher-fetcher` agents in a **single message** so they run in parallel. Do not wait between them.
+
+Each agent prompt (fill in real IDs from step 3):
+
+**Agent 1 prompt:**
+```
+Matchweek: {N}. Your fixture IDs: {id1} {id2} {id3} {id4}
+Run from /Users/gabrielramos/Desktop/PL-team-builder:
+  python3 scripts/soccerdata_client.py fetch-players-subset {N} {id1} {id2} {id3} {id4}
+  python3 scripts/soccerdata_client.py fetch-lineups-subset {N} {id1} {id2} {id3} {id4}
+Report when done.
+```
+
+**Agent 2 prompt:**
+```
+Matchweek: {N}. Your fixture IDs: {id5} {id6} {id7}
+Run from /Users/gabrielramos/Desktop/PL-team-builder:
+  python3 scripts/soccerdata_client.py fetch-players-subset {N} {id5} {id6} {id7}
+  python3 scripts/soccerdata_client.py fetch-lineups-subset {N} {id5} {id6} {id7}
+Report when done.
+```
+
+**Agent 3 prompt:**
+```
+Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10}
+Run from /Users/gabrielramos/Desktop/PL-team-builder:
+  python3 scripts/soccerdata_client.py fetch-players-subset {N} {id8} {id9} {id10}
+  python3 scripts/soccerdata_client.py fetch-lineups-subset {N} {id8} {id9} {id10}
+Report when done.
+```
+
+Wait for all 3 agents to complete before proceeding.
+
+## Step 5: Scrape Match Reports (after parallel fetch)
 
 ```bash
-python scripts/soccerdata_client.py fetch-players $ARGUMENTS
+python3 scripts/pl_scraper.py match-reports $ARGUMENTS
 ```
 
-This will:
-- Fetch Understat (goals, assists, key_passes, minutes) and ESPN (saves, shots_on_target, formation) in parallel per fixture
-- Save to `data/2025-26/matchweek-{N}/players_{fixture_id}.json` for each fixture
-- Return: all player stats for both teams
-
-**Note**: Tackles, interceptions, blocks are not available from soccerdata sources. CB/CDM selection will use available stats.
-
-**Performance**: First run ~4–5 minutes (network). Warm soccerdata cache ~30–60s. See `.claude/rules/soccerdata.md` for details.
-
-## Step 4: Fetch Lineups
-
-```bash
-python scripts/soccerdata_client.py fetch-lineups $ARGUMENTS
-```
-
-This will:
-- Fetch ESPN lineup data (formation string + starting XI) for each fixture
-- Save to `data/2025-26/matchweek-{N}/lineups_{fixture_id}.json`
-
-## Step 5: Scrape Match Reports
-
-```bash
-python scripts/pl_scraper.py match-reports $ARGUMENTS
-```
-
-This will:
-- Navigate to the PL website for each fixture
-- Extract match report text
-- Save to `data/2025-26/matchweek-{N}/reports/`
-
-If scraping fails for a fixture, log the failure and continue. Missing reports should not block the process.
+Save to `data/2025-26/matchweek-{N}/reports/`. Failures are non-blocking.
 
 ## Step 6: Scrape Commentaries
 
 ```bash
-python scripts/pl_scraper.py commentaries $ARGUMENTS
+python3 scripts/pl_scraper.py commentaries $ARGUMENTS
 ```
 
-This will:
-- Navigate to each match's Commentary tab
-- Extract commentary text
-- Save to `data/2025-26/matchweek-{N}/commentaries/`
+Save to `data/2025-26/matchweek-{N}/commentaries/`. Failures are non-blocking.
 
 ## Step 7: Verify Data
 
-Check all expected files exist:
 ```bash
 ls data/2025-26/matchweek-$ARGUMENTS/
 ```
 
-Expected:
+Expected files:
 - `fixtures.json` ✅
-- `players_{id}.json` × 10 ✅
-- `lineups_{id}.json` × 10 ✅
+- `players_{id}.json` × N fixtures ✅
+- `lineups_{id}.json` × N fixtures ✅
 - `reports/*.txt` (may be partial) ⚠️
 - `commentaries/*.txt` (may be partial) ⚠️
 
@@ -103,9 +108,9 @@ Expected:
 Report back:
 ```
 Research complete for Matchweek {N}:
-✅ Fixtures: 10/10 fetched
-✅ Player stats: 10/10 fetched ({total_players} players)
-✅ Lineups: 10/10 fetched
+✅ Fixtures: {N}/10 fetched
+✅ Player stats: {N}/10 fetched ({total_players} players) — 3 parallel agents
+✅ Lineups: {N}/10 fetched — 3 parallel agents
 ✅ Match reports: {X}/10 scraped
 ✅ Commentaries: {Y}/10 scraped
 Data sources: FPL API + Understat + ESPN (via soccerdata)
