@@ -79,18 +79,16 @@ Agent 3 prompt: `Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10} — run fe
 
 Wait for all 3 to complete.
 
-## Step 4: Analysis Phase — Single Researcher Agent
+## Step 4: Analysis Phase — Invoke /analyze skill
 
-Delegate to the **researcher** agent:
+Run the `/analyze {N}` skill directly. This orchestrates the full enhanced analysis pipeline:
+1. Formation analysis
+2. Shortlist generation (top 3 per position slot with xG, xA, aerial rates, etc.)
+3. 3 analyst subagents in parallel (each covers ~4/4/3 positions)
+4. Merge analyst selections → players.json
+5. Report generation
 
-"Analyze matchweek {N} data:
-1. `python3 scripts/formation_analyzer.py {N}` — select best formation
-2. `python3 scripts/player_evaluator.py {N}` — select top players per position
-3. `python3 scripts/report_generator.py {N}` — generate synthesis reports
-
-Confirm formation selected and list the 11 players chosen."
-
-After the researcher reports back, display to the user:
+After the analyze skill completes, display to the user:
 ```
 🏆 Premier League Team of the Week — Matchweek {N}
 
@@ -132,23 +130,13 @@ Confirm both `output/matchweek-{N}/presentation.pdf` and `output/matchweek-{N}/p
 
 **Execute directly in the main session — do NOT delegate to a subagent.**
 
-**7a.** Generate the email HTML:
+**7a.** Generate the email HTML and send via the Python Gmail script:
 ```bash
 python3 scripts/email_sender.py {N}
-```
-
-**7b.** Read the full HTML content from `output/matchweek-{N}/email.html`.
-
-**7c.** Send using the **`send_email`** tool from the **gmail** MCP server:
-- `to`: `["24hrnts@gmail.com"]`
-- `subject`: `⚽ PL TOTW — Matchweek {N}`
-- `body`: full HTML string read in 7b
-- `attachments`: `[{"path": "/Users/gabrielramos/Desktop/PL-team-builder/output/matchweek-{N}/presentation.pdf", "filename": "PL-TOTW-Matchweek-{N}.pdf"}]`
-
-**If the gmail MCP tool is not available**, fall back to:
-```bash
 python3 scripts/send_email_gmail.py {N}
 ```
+
+The email HTML embeds the diagram as a base64 inline image (~1.5 MB) — always use the Python script for delivery, not the Gmail MCP tool.
 
 ## Step 8: GDrive Upload Phase
 

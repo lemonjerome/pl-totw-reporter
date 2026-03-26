@@ -46,7 +46,7 @@ from data_models import (
     Fixture, TeamInfo, Score, FixtureStatus,
     Player, PlayerStats, PlayerGames, PlayerGoals, PlayerShots,
     PlayerPasses, PlayerTackles, PlayerDuels, PlayerDribbles,
-    PlayerCards,
+    PlayerCards, PlayerPenalty,
 )
 
 # ---------------------------------------------------------------------------
@@ -330,6 +330,7 @@ def _parse_sofascore_team(team_data: dict, goals_conceded: Optional[int]) -> tup
             "dribbles_success":  stats.get("wonContest", 0) or 0,
             "dribbles_attempts": stats.get("totalContest", 0) or 0,
             "saves":             stats.get("saves", 0) or 0,
+            "penalty_saves":     stats.get("penaltySave", 0) or 0,
             "goals_conceded":    goals_conceded if str(pos_code_raw) == "G" else None,
             "yellow_cards":      1 if stats.get("yellowCard") else 0,
             "red_cards":         1 if stats.get("directRedCard") or stats.get("redCard") else 0,
@@ -753,6 +754,11 @@ def _build_sofascore_player(
             yellow=ss["yellow_cards"],
             red=ss["red_cards"],
         ),
+        penalty=PlayerPenalty(
+            saved=ss.get("penalty_saves"),
+        ),
+        xg=ss.get("xg"),
+        xa=ss.get("xa"),
     )
 
     # Use SofaScore country code directly; fall back to FootballTransfers if missing
@@ -1027,7 +1033,9 @@ def _players_to_api_football_format(players: list[Player], fixture: Fixture) -> 
                     },
                     "dribbles": {"attempts": s.dribbles.attempts, "success": s.dribbles.success},
                     "cards": {"yellow": s.cards.yellow, "red": s.cards.red},
-                    "penalty": {"won": None, "committed": None, "scored": None, "missed": None, "saved": None},
+                    "penalty": {"won": None, "committed": None, "scored": None, "missed": None, "saved": s.penalty.saved},
+                    "xg": s.xg,
+                    "xa": s.xa,
                 }],
             })
         result.append(team_entry)

@@ -28,23 +28,10 @@ This script renders `templates/email.html` with all matchweek data and embeds th
 
 If the script fails, read the error and fix before continuing.
 
-## Step 2: Read Email Content
+## Step 2: Send via Python Gmail Script
 
-Read the full HTML from:
-```
-output/matchweek-$ARGUMENTS/email.html
-```
+The email HTML embeds the diagram as a base64 inline image (~1.5 MB), which is too large for the Gmail MCP tool. Always use the Python script:
 
-## Step 3: Send via Gmail MCP
-
-Use the `send_email` tool from the **gmail** MCP server:
-
-- **to**: `["24hrnts@gmail.com"]`
-- **subject**: `⚽ PL TOTW — Matchweek $ARGUMENTS`
-- **body**: full HTML content from `output/matchweek-$ARGUMENTS/email.html`
-- **attachments**: `[{"path": "/Users/gabrielramos/Desktop/PL-team-builder/output/matchweek-$ARGUMENTS/presentation.pdf", "filename": "PL-TOTW-Matchweek-$ARGUMENTS.pdf"}]`
-
-**If the Gmail MCP is not connected**, fall back to the Python script:
 ```bash
 python3 scripts/send_email_gmail.py $ARGUMENTS
 ```

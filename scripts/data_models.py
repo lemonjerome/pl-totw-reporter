@@ -155,6 +155,8 @@ class PlayerStats(BaseModel):
     dribbles: PlayerDribbles = Field(default_factory=PlayerDribbles)
     cards: PlayerCards = Field(default_factory=PlayerCards)
     penalty: PlayerPenalty = Field(default_factory=PlayerPenalty)
+    xg: Optional[float] = None   # expectedGoals from SofaScore
+    xa: Optional[float] = None   # expectedAssists from SofaScore
 
     @property
     def minutes_played(self) -> int:
@@ -240,6 +242,42 @@ class PlayerStats(BaseModel):
             return float(self.games.rating or 0)
         except (ValueError, TypeError):
             return 0.0
+
+    @property
+    def xg_value(self) -> float:
+        return self.xg or 0.0
+
+    @property
+    def xa_value(self) -> float:
+        return self.xa or 0.0
+
+    @property
+    def aerial_won_rate(self) -> float:
+        """aerial_won / (aerial_won + aerial_lost). 0.0 if no data."""
+        won = self.duels.aerial_won or 0
+        lost = self.duels.aerial_lost or 0
+        total = won + lost
+        return round(won / total, 3) if total > 0 else 0.0
+
+    @property
+    def dribble_success_rate(self) -> float:
+        """dribbles_success / dribble_attempts. 0.0 if no data."""
+        success = self.dribbles.success or 0
+        attempts = self.dribbles.attempts or 0
+        return round(success / attempts, 3) if attempts > 0 else 0.0
+
+    @property
+    def total_passes(self) -> int:
+        return self.passes.total or 0
+
+    @property
+    def penalty_saves(self) -> int:
+        return self.penalty.saved or 0
+
+    @property
+    def card_penalty(self) -> float:
+        """Score deduction: -0.3 per yellow, -1.5 for red."""
+        return -(self.cards.yellow * 0.3) - (self.cards.red * 1.5)
 
 
 class Player(BaseModel):
@@ -344,3 +382,30 @@ class TOTWSelection(BaseModel):
             if p.position_slot == position:
                 return p
         return None
+
+
+# ---------------------------------------------------------------------------
+# Shortlist models — top-3 candidates per position slot (pre-analyst)
+# ---------------------------------------------------------------------------
+
+class ShortlistCandidate(BaseModel):
+    rank: int
+    player_name: str
+    team: str
+    player_id: int
+    score: float           # rating-anchored composite float for display
+    fixture_id: int
+    fixture_result: str    # "win", "draw", "loss"
+    stats: dict            # position-appropriate stat snapshot
+
+
+class ShortlistSlot(BaseModel):
+    slot_index: int
+    position: str                              # "GK", "CB", "ST", etc.
+    candidates: list[ShortlistCandidate]       # up to 3, ranked
+
+
+class Shortlist(BaseModel):
+    matchweek: int
+    formation: str
+    slots: list[ShortlistSlot]

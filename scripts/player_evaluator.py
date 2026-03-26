@@ -1,9 +1,11 @@
 """
 Player Evaluator for the EPL TOTW Builder.
 
-Loads cached player stats for a matchweek, applies position-specific ranking
-criteria (from position-roles.md), and selects the best player for each
-position slot in the chosen formation.
+Loads cached player stats for a matchweek, applies enhanced position-specific
+ranking criteria, and produces a top-3 shortlist per position slot.
+
+Analyst subagents then review the shortlists and pick the final top 1 per slot.
+The merge_analyst_selections.py script assembles the final players.json.
 
 CLI:
     python scripts/player_evaluator.py 30
@@ -32,6 +34,9 @@ from scripts.data_models import (
     PlayerStats,
     PlayerTackles,
     SelectedFormation,
+    Shortlist,
+    ShortlistCandidate,
+    ShortlistSlot,
     TOTWPlayer,
     TOTWSelection,
 )
@@ -45,102 +50,131 @@ from scripts.utils import (
 
 # ---------------------------------------------------------------------------
 # Position score functions — higher score = better candidate
-# Each function returns a tuple for sorting (descending)
+# Each returns a tuple for sort (descending). Card penalty is always last.
+# Key principle: every position uses stats it actually produces — no zeros.
 # ---------------------------------------------------------------------------
 
 def score_gk(p: Player) -> tuple:
-    """GK: saves first, then clean sheet bonus, then goals conceded (inverted)."""
-    saves = p.stats.saves
-    clean = 1 if p.stats.clean_sheet else 0
-    conceded = -(p.stats.goals.conceded or 0)
-    rating = p.stats.rating_float
-    return (saves, clean, conceded, rating)
+    """GK: saves, clean sheet, penalty saves, goals conceded (inverted), rating."""
+    return (
+        p.stats.saves,
+        1 if p.stats.clean_sheet else 0,
+        p.stats.penalty_saves,
+        -(p.stats.goals.conceded or 0),
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_cb(p: Player) -> tuple:
-    """CB: tackles + interceptions + clearances, then aerial duels, then rating."""
-    tackles = p.stats.tackles_won
-    intercepts = p.stats.interceptions
-    clearances = p.stats.clearances
-    blocks = p.stats.tackles.blocks or 0
-    aerial = p.stats.aerial_duels_won + p.stats.duels_won
-    rating = p.stats.rating_float
-    return (tackles + intercepts + clearances, blocks, aerial, rating)
+    """CB: defensive actions (tackles+intercepts), clearances, aerial dominance, rating."""
+    def_actions = p.stats.tackles_won + p.stats.interceptions
+    return (
+        def_actions,
+        p.stats.clearances,
+        (p.stats.tackles.blocks or 0) + p.stats.aerial_duels_won,
+        p.stats.aerial_won_rate,
+        p.stats.duels_won,
+        p.stats.pass_accuracy,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_fb(p: Player) -> tuple:
-    """RB/LB: defensive actions + attacking contribution + aerial duels."""
-    defensive = p.stats.defensive_actions
-    attacking = p.stats.key_passes + (p.stats.assists * 2)  # assists weighted
-    dribbles = p.stats.dribbles_completed + p.stats.aerial_duels_won
-    rating = p.stats.rating_float
-    return (defensive, attacking, dribbles, rating)
+    """RB/LB: defensive + attacking dual role, crosses, xA."""
+    attacking = p.stats.key_passes + (p.stats.assists * 2) + p.stats.xa_value
+    return (
+        p.stats.defensive_actions + attacking,
+        p.stats.accurate_crosses,
+        p.stats.dribbles_completed + p.stats.aerial_duels_won,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_wb(p: Player) -> tuple:
-    """LWB/RWB: attacking weighted more than fullback."""
-    attacking = (p.stats.assists * 3) + (p.stats.key_passes * 2) + p.stats.dribbles_completed
-    defensive = p.stats.defensive_actions
-    rating = p.stats.rating_float
-    return (attacking, defensive, rating)
+    """LWB/RWB: attacking weighted more heavily, crosses, xA."""
+    attacking = (p.stats.assists * 3) + (p.stats.key_passes * 2) + (p.stats.xa_value * 2)
+    return (
+        attacking,
+        p.stats.accurate_crosses,
+        p.stats.defensive_actions,
+        p.stats.dribbles_completed,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_cdm(p: Player) -> tuple:
-    """CDM: tackles + interceptions primary, clearances + duels secondary."""
-    tackles = p.stats.tackles_won
-    intercepts = p.stats.interceptions
-    clearances = p.stats.clearances
-    duels = p.stats.duels_won
-    pass_acc = p.stats.pass_accuracy
-    rating = p.stats.rating_float
-    return (tackles + intercepts, clearances + duels, pass_acc, rating)
+    """CDM: tackles + interceptions primary, total passes as work-rate indicator."""
+    return (
+        p.stats.tackles_won + p.stats.interceptions,
+        p.stats.clearances + p.stats.duels_won,
+        p.stats.total_passes,
+        p.stats.pass_accuracy,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_cm(p: Player) -> tuple:
-    """CM: key passes + goal contributions."""
-    key_passes = p.stats.key_passes
-    goal_contrib = p.stats.goal_contributions
-    pass_acc = p.stats.pass_accuracy
-    rating = p.stats.rating_float
-    return (key_passes, goal_contrib, pass_acc, rating)
+    """CM: key passes + goal contributions, xA, total passes, accuracy."""
+    return (
+        p.stats.key_passes + p.stats.goal_contributions,
+        p.stats.xa_value,
+        p.stats.total_passes,
+        p.stats.pass_accuracy,
+        p.stats.tackles_won,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_cam(p: Player) -> tuple:
-    """CAM: chances created + goal contributions + dribbles."""
-    key_passes = p.stats.key_passes
-    goal_contrib = p.stats.goal_contributions
-    dribbles = p.stats.dribbles_completed
-    shots_ot = p.stats.shots_on_target
-    rating = p.stats.rating_float
-    return (key_passes, goal_contrib, dribbles, shots_ot, rating)
+    """CAM: creative output, xA+xG, dribble quality, shots on target."""
+    return (
+        p.stats.key_passes + p.stats.goal_contributions,
+        p.stats.xa_value + p.stats.xg_value,
+        p.stats.dribbles_completed + p.stats.dribble_success_rate,
+        p.stats.shots_on_target,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_winger(p: Player) -> tuple:
-    """RW/LW/RM/LM: goals + assists + dribbles."""
-    goals = p.stats.goals_scored
-    assists = p.stats.assists
-    dribbles = p.stats.dribbles_completed
-    key_passes = p.stats.key_passes
-    shots_ot = p.stats.shots_on_target
-    rating = p.stats.rating_float
-    return (goals + assists, dribbles, key_passes, shots_ot, rating)
+    """RW/LW/RM/LM: goals+assists, xG+xA, dribble quality, key passes, crosses."""
+    return (
+        p.stats.goals_scored + p.stats.assists,
+        p.stats.xg_value + p.stats.xa_value,
+        p.stats.dribbles_completed + p.stats.dribble_success_rate,
+        p.stats.key_passes,
+        p.stats.accurate_crosses,
+        p.stats.shots_on_target,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 def score_st(p: Player) -> tuple:
-    """ST/CF: goals primary, then shots on target, then conversion."""
-    goals = p.stats.goals_scored
-    shots_ot = p.stats.shots_on_target
-    conversion = p.stats.shot_conversion
-    assists = p.stats.assists
-    rating = p.stats.rating_float
-    return (goals, shots_ot, conversion, assists, rating)
+    """ST/CF: goals primary, xG, shot volume, conversion, aerial dominance."""
+    return (
+        p.stats.goals_scored,
+        p.stats.shots_on_target,
+        p.stats.xg_value,
+        p.stats.shot_conversion,
+        p.stats.assists,
+        p.stats.aerial_duels_won + p.stats.aerial_won_rate,
+        p.stats.rating_float,
+        p.stats.card_penalty,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Position slot → score function + eligible API position codes
 # ---------------------------------------------------------------------------
 
-# Maps formation position slot → (score_fn, eligible_api_positions)
 POSITION_CONFIG: dict[str, dict] = {
     "GK":  {"score_fn": score_gk,     "api_pos": {"G"}},
     "RB":  {"score_fn": score_fb,     "api_pos": {"D"}},
@@ -159,8 +193,6 @@ POSITION_CONFIG: dict[str, dict] = {
     "CF":  {"score_fn": score_st,     "api_pos": {"F", "M"}},
 }
 
-# For each TOTW slot, which specific_positions are compatible?
-# Primary = exact match; Flexible = fallback if no primary candidates
 SLOT_COMPATIBILITY: dict[str, dict[str, list[str]]] = {
     "GK":  {"primary": ["GK"],               "flexible": []},
     "RB":  {"primary": ["RB", "RWB"],        "flexible": ["CB", "LB"]},
@@ -179,9 +211,8 @@ SLOT_COMPATIBILITY: dict[str, dict[str, list[str]]] = {
     "CF":  {"primary": ["CF", "ST"],         "flexible": ["CAM"]},
 }
 
-# Flexible fallback — if not enough candidates for a slot, also consider these api_pos
 FLEXIBLE_API_POS: dict[str, set[str]] = {
-    "CDM": {"D"},   # Some DMs listed as defenders
+    "CDM": {"D"},
     "CM":  {"D"},
     "CAM": {"F"},
     "ST":  {"M"},
@@ -195,7 +226,7 @@ def _parse_player_from_cache(
     team_raw: dict,
     fixture_id: int,
     fixture_winner: Optional[str],
-    team_side: str,  # "home" or "away"
+    team_side: str,
 ) -> Optional[Player]:
     """Parse a player dict from the players cache into a Player model."""
     p = player_raw.get("player", {})
@@ -271,9 +302,10 @@ def _parse_player_from_cache(
             missed=penalty_raw.get("missed"),
             saved=penalty_raw.get("saved"),
         ),
+        xg=stats_raw.get("xg"),
+        xa=stats_raw.get("xa"),
     )
 
-    # Determine fixture result from team perspective
     if fixture_winner is None:
         fixture_result = "draw"
     elif fixture_winner == team_side:
@@ -328,7 +360,6 @@ def load_all_players(matchweek: int) -> list[Player]:
 
         for team_data in players_data:
             team_raw = team_data["team"]
-            # Determine side (home or away)
             side = "home" if team_raw["id"] == home_team["id"] else "away"
 
             for player_raw in team_data.get("players", []):
@@ -341,110 +372,237 @@ def load_all_players(matchweek: int) -> list[Player]:
     return all_players
 
 
-def select_players_for_formation(
+def _get_candidates(
+    position_slot: str,
+    all_players: list[Player],
+    exclude_ids: set[int],
+) -> list[Player]:
+    """Return eligible candidates for a slot using 4-tier fallback."""
+    config = POSITION_CONFIG.get(position_slot, {})
+    api_pos = config.get("api_pos", set())
+    flex_api_pos = FLEXIBLE_API_POS.get(position_slot, set())
+    compat = SLOT_COMPATIBILITY.get(position_slot, {"primary": [], "flexible": []})
+    primary_specific = set(compat["primary"])
+    flexible_specific = set(compat["flexible"])
+
+    def eligible(p: Player) -> bool:
+        return p.player_id not in exclude_ids and p.is_eligible
+
+    # Tier 1: exact specific_position match
+    candidates = [p for p in all_players if eligible(p) and p.specific_position in primary_specific]
+    if candidates:
+        return candidates
+
+    # Tier 2: flexible specific_position match
+    candidates = [p for p in all_players if eligible(p) and p.specific_position in flexible_specific]
+    if candidates:
+        return candidates
+
+    # Tier 3: broad API position code
+    candidates = [p for p in all_players if eligible(p) and p.position_code in api_pos]
+    if candidates:
+        return candidates
+
+    # Tier 4: include flexible api_pos codes
+    candidates = [p for p in all_players if eligible(p) and p.position_code in (api_pos | flex_api_pos)]
+    if candidates:
+        return candidates
+
+    # Fallback: anyone with most minutes
+    return [p for p in all_players if p.player_id not in exclude_ids]
+
+
+def _sort_candidates(candidates: list[Player], score_fn) -> list[Player]:
+    """Sort candidates by score + win bonus + minutes."""
+    def sort_key(p: Player):
+        score = score_fn(p)
+        win_bonus = 1 if p.fixture_result == "win" else 0
+        minutes = p.stats.minutes_played
+        return score + (win_bonus,) + (minutes,)
+
+    return sorted(candidates, key=sort_key, reverse=True)
+
+
+def _build_stats_snapshot(player: Player, slot: str) -> dict:
+    """Return a position-appropriate flat dict of relevant stats for analyst display."""
+    s = player.stats
+    base = {"rating": s.rating_float, "minutes": s.minutes_played, "result": player.fixture_result}
+
+    if slot == "GK":
+        return {**base,
+            "saves": s.saves,
+            "conceded": s.goals.conceded,
+            "penalty_saves": s.penalty_saves,
+            "clean_sheet": s.clean_sheet,
+            "pass_accuracy": s.pass_accuracy,
+        }
+    elif slot == "CB":
+        return {**base,
+            "tackles_won": s.tackles_won,
+            "interceptions": s.interceptions,
+            "clearances": s.clearances,
+            "blocks": s.tackles.blocks or 0,
+            "aerial_won": s.aerial_duels_won,
+            "aerial_won_rate": s.aerial_won_rate,
+            "duels_won": s.duels_won,
+            "pass_accuracy": s.pass_accuracy,
+        }
+    elif slot in ("RB", "LB"):
+        return {**base,
+            "tackles_won": s.tackles_won,
+            "interceptions": s.interceptions,
+            "key_passes": s.key_passes,
+            "assists": s.assists,
+            "xa": s.xa_value,
+            "accurate_crosses": s.accurate_crosses,
+            "dribbles": s.dribbles_completed,
+            "aerial_won": s.aerial_duels_won,
+        }
+    elif slot in ("RWB", "LWB"):
+        return {**base,
+            "assists": s.assists,
+            "key_passes": s.key_passes,
+            "xa": s.xa_value,
+            "accurate_crosses": s.accurate_crosses,
+            "dribbles": s.dribbles_completed,
+            "tackles_won": s.tackles_won,
+            "interceptions": s.interceptions,
+        }
+    elif slot == "CDM":
+        return {**base,
+            "tackles_won": s.tackles_won,
+            "interceptions": s.interceptions,
+            "clearances": s.clearances,
+            "duels_won": s.duels_won,
+            "total_passes": s.total_passes,
+            "pass_accuracy": s.pass_accuracy,
+        }
+    elif slot == "CM":
+        return {**base,
+            "key_passes": s.key_passes,
+            "goals": s.goals_scored,
+            "assists": s.assists,
+            "xa": s.xa_value,
+            "total_passes": s.total_passes,
+            "pass_accuracy": s.pass_accuracy,
+            "tackles_won": s.tackles_won,
+        }
+    elif slot == "CAM":
+        return {**base,
+            "key_passes": s.key_passes,
+            "goals": s.goals_scored,
+            "assists": s.assists,
+            "xa": s.xa_value,
+            "xg": s.xg_value,
+            "dribbles": s.dribbles_completed,
+            "dribble_success_rate": s.dribble_success_rate,
+            "shots_on_target": s.shots_on_target,
+        }
+    elif slot in ("RW", "LW", "RM", "LM"):
+        return {**base,
+            "goals": s.goals_scored,
+            "assists": s.assists,
+            "xg": s.xg_value,
+            "xa": s.xa_value,
+            "dribbles": s.dribbles_completed,
+            "dribble_success_rate": s.dribble_success_rate,
+            "key_passes": s.key_passes,
+            "accurate_crosses": s.accurate_crosses,
+            "shots_on_target": s.shots_on_target,
+        }
+    elif slot in ("ST", "CF"):
+        return {**base,
+            "goals": s.goals_scored,
+            "shots_on_target": s.shots_on_target,
+            "xg": s.xg_value,
+            "shot_conversion": s.shot_conversion,
+            "assists": s.assists,
+            "aerial_won": s.aerial_duels_won,
+            "aerial_won_rate": s.aerial_won_rate,
+            "dribbles": s.dribbles_completed,
+        }
+    else:
+        return {**base,
+            "goals": s.goals_scored,
+            "assists": s.assists,
+            "key_passes": s.key_passes,
+            "tackles_won": s.tackles_won,
+        }
+
+
+def _compute_display_score(player: Player, slot: str) -> float:
+    """Rating-anchored composite score for shortlist display."""
+    s = player.stats
+    base = s.rating_float + s.card_penalty
+
+    bonuses: dict[str, float] = {
+        "GK":  s.saves * 0.3 + (0.5 if s.clean_sheet else 0) + s.penalty_saves * 0.5,
+        "CB":  (s.tackles_won + s.interceptions) * 0.15 + s.clearances * 0.1 + s.aerial_won_rate * 0.3,
+        "RB":  s.defensive_actions * 0.1 + s.assists * 0.4 + s.key_passes * 0.15 + s.xa_value * 0.2,
+        "LB":  s.defensive_actions * 0.1 + s.assists * 0.4 + s.key_passes * 0.15 + s.xa_value * 0.2,
+        "RWB": s.assists * 0.5 + s.key_passes * 0.2 + s.xa_value * 0.3 + s.accurate_crosses * 0.1,
+        "LWB": s.assists * 0.5 + s.key_passes * 0.2 + s.xa_value * 0.3 + s.accurate_crosses * 0.1,
+        "CDM": (s.tackles_won + s.interceptions) * 0.2 + s.total_passes * 0.005,
+        "CM":  s.key_passes * 0.2 + s.goal_contributions * 0.4 + s.xa_value * 0.2,
+        "CAM": s.key_passes * 0.25 + s.goal_contributions * 0.4 + s.xa_value * 0.25,
+        "RM":  s.goals_scored * 0.6 + s.assists * 0.4 + s.xg_value * 0.2 + s.xa_value * 0.15,
+        "LM":  s.goals_scored * 0.6 + s.assists * 0.4 + s.xg_value * 0.2 + s.xa_value * 0.15,
+        "RW":  s.goals_scored * 0.6 + s.assists * 0.4 + s.xg_value * 0.2 + s.xa_value * 0.15,
+        "LW":  s.goals_scored * 0.6 + s.assists * 0.4 + s.xg_value * 0.2 + s.xa_value * 0.15,
+        "ST":  s.goals_scored * 0.7 + s.shots_on_target * 0.1 + s.xg_value * 0.2,
+        "CF":  s.goals_scored * 0.7 + s.shots_on_target * 0.1 + s.xg_value * 0.2,
+    }
+
+    return round(base + bonuses.get(slot, 0.0), 2)
+
+
+def build_shortlists(
+    matchweek: int,
     formation: SelectedFormation,
     all_players: list[Player],
-) -> list[TOTWPlayer]:
+) -> Shortlist:
     """
-    Select the best player for each position slot in the formation.
-    Returns list of TOTWPlayer (11 total).
+    Build a top-3 shortlist per position slot.
+    Players can appear in multiple shortlists — analysts deduplicate.
     """
-    positions = formation.positions  # e.g. ["GK", "RB", "CB", "CB", ...]
-    selected: list[TOTWPlayer] = []
-    used_player_ids: set[int] = set()
+    positions = formation.positions
+    slots: list[ShortlistSlot] = []
 
-    # Count how many of each slot we need
-    slot_counts: dict[str, int] = {}
-    for pos in positions:
-        slot_counts[pos] = slot_counts.get(pos, 0) + 1
-
-    # Process each unique slot type, handling duplicates (e.g. 2x CB)
-    processed_slots: dict[str, int] = {}  # tracks how many of each slot filled
-
-    for position_slot in positions:
-        # Get config for this position
+    for slot_idx, position_slot in enumerate(positions):
         config = POSITION_CONFIG.get(position_slot)
         if not config:
-            # Unknown position — skip
             continue
 
         score_fn = config["score_fn"]
-        api_pos = config["api_pos"]
-        flex_api_pos = FLEXIBLE_API_POS.get(position_slot, set())
-        compat = SLOT_COMPATIBILITY.get(position_slot, {"primary": [], "flexible": []})
-        primary_specific = set(compat["primary"])
-        flexible_specific = set(compat["flexible"])
+        # No used_ids exclusion here — analysts handle deduplication
+        candidates = _get_candidates(position_slot, all_players, exclude_ids=set())
+        candidates = _sort_candidates(candidates, score_fn)
 
-        def _eligible_base(p: Player) -> bool:
-            return p.player_id not in used_player_ids and p.is_eligible
+        top3 = candidates[:3]
+        shortlist_candidates = []
+        for rank_i, cand in enumerate(top3, 1):
+            shortlist_candidates.append(ShortlistCandidate(
+                rank=rank_i,
+                player_name=cand.name,
+                team=cand.team_name,
+                player_id=cand.player_id,
+                score=_compute_display_score(cand, position_slot),
+                fixture_id=cand.fixture_id,
+                fixture_result=cand.fixture_result or "unknown",
+                stats=_build_stats_snapshot(cand, position_slot),
+            ))
 
-        # Tier 1: exact specific_position match (most strict)
-        candidates = [
-            p for p in all_players
-            if _eligible_base(p)
-            and p.specific_position in primary_specific
-        ]
-
-        # Tier 2: flexible specific_position match
-        if not candidates:
-            candidates = [
-                p for p in all_players
-                if _eligible_base(p)
-                and p.specific_position in flexible_specific
-            ]
-
-        # Tier 3: fall back to broad API position code (original behavior)
-        if not candidates:
-            candidates = [
-                p for p in all_players
-                if _eligible_base(p)
-                and p.position_code in api_pos
-            ]
-
-        # Tier 4: include flexible api_pos codes
-        if not candidates:
-            candidates = [
-                p for p in all_players
-                if _eligible_base(p)
-                and p.position_code in (api_pos | flex_api_pos)
-            ]
-
-        # Tiebreaker: prefer player from winning team (encoded in fixture_result)
-        def sort_key(p: Player):
-            score = score_fn(p)
-            win_bonus = 1 if p.fixture_result == "win" else 0
-            minutes = p.stats.minutes_played
-            return score + (win_bonus,) + (minutes,)
-
-        candidates.sort(key=sort_key, reverse=True)
-
-        if not candidates:
-            # No candidates at all — fill with whoever has most minutes at that api_pos
-            fallback = [
-                p for p in all_players
-                if p.player_id not in used_player_ids
-                and p.position_code in (api_pos | flex_api_pos | {"G", "D", "M", "F"})
-            ]
-            fallback.sort(key=lambda p: p.stats.minutes_played, reverse=True)
-            candidates = fallback[:1]
-
-        if not candidates:
-            continue
-
-        best = candidates[0]
-        used_player_ids.add(best.player_id)
-
-        key_stat = _build_key_stat(best, position_slot)
-        reason = _build_reason(best, position_slot)
-
-        selected.append(TOTWPlayer(
-            position_slot=position_slot,
-            player=best,
-            selection_reason=reason,
-            key_stat=key_stat,
+        slots.append(ShortlistSlot(
+            slot_index=slot_idx,
+            position=position_slot,
+            candidates=shortlist_candidates,
         ))
 
-    return selected
+    return Shortlist(
+        matchweek=matchweek,
+        formation=formation.formation,
+        slots=slots,
+    )
 
 
 def _build_key_stat(player: Player, slot: str) -> str:
@@ -455,6 +613,8 @@ def _build_key_stat(player: Player, slot: str) -> str:
     if slot == "GK":
         if s.saves > 0:
             parts.append(f"{s.saves} save{'s' if s.saves != 1 else ''}")
+        if s.penalty_saves > 0:
+            parts.append(f"{s.penalty_saves} penalty save{'s' if s.penalty_saves != 1 else ''}")
         if s.clean_sheet:
             parts.append("clean sheet")
         if s.goals.conceded is not None:
@@ -465,38 +625,50 @@ def _build_key_stat(player: Player, slot: str) -> str:
             parts.append(f"{s.tackles_won} tackle{'s' if s.tackles_won != 1 else ''}")
         if s.interceptions > 0:
             parts.append(f"{s.interceptions} interception{'s' if s.interceptions != 1 else ''}")
+        if s.clearances > 0:
+            parts.append(f"{s.clearances} clearance{'s' if s.clearances != 1 else ''}")
         if s.goals_scored > 0:
             parts.append(f"{s.goals_scored} goal{'s' if s.goals_scored != 1 else ''}")
         if s.assists > 0:
             parts.append(f"{s.assists} assist{'s' if s.assists != 1 else ''}")
 
-    elif slot in ("CDM", "CM"):
-        if s.goals_scored > 0:
-            parts.append(f"{s.goals_scored} goal{'s' if s.goals_scored != 1 else ''}")
-        if s.assists > 0:
-            parts.append(f"{s.assists} assist{'s' if s.assists != 1 else ''}")
-        if s.key_passes > 0:
-            parts.append(f"{s.key_passes} key pass{'es' if s.key_passes != 1 else ''}")
+    elif slot == "CDM":
         if s.tackles_won > 0:
             parts.append(f"{s.tackles_won} tackle{'s' if s.tackles_won != 1 else ''}")
+        if s.interceptions > 0:
+            parts.append(f"{s.interceptions} interception{'s' if s.interceptions != 1 else ''}")
+        if s.total_passes > 0:
+            parts.append(f"{s.total_passes} passes")
 
-    elif slot in ("CAM", "RW", "LW", "RM", "LM"):
+    elif slot in ("CM", "CAM"):
         if s.goals_scored > 0:
             parts.append(f"{s.goals_scored} goal{'s' if s.goals_scored != 1 else ''}")
         if s.assists > 0:
             parts.append(f"{s.assists} assist{'s' if s.assists != 1 else ''}")
         if s.key_passes > 0:
             parts.append(f"{s.key_passes} key pass{'es' if s.key_passes != 1 else ''}")
+        if s.xa_value > 0:
+            parts.append(f"xA {s.xa_value:.2f}")
+
+    elif slot in ("RW", "LW", "RM", "LM"):
+        if s.goals_scored > 0:
+            parts.append(f"{s.goals_scored} goal{'s' if s.goals_scored != 1 else ''}")
+        if s.assists > 0:
+            parts.append(f"{s.assists} assist{'s' if s.assists != 1 else ''}")
+        if s.xg_value > 0:
+            parts.append(f"xG {s.xg_value:.2f}")
         if s.dribbles_completed > 0:
             parts.append(f"{s.dribbles_completed} dribble{'s' if s.dribbles_completed != 1 else ''}")
 
     elif slot in ("ST", "CF"):
         if s.goals_scored > 0:
             parts.append(f"{s.goals_scored} goal{'s' if s.goals_scored != 1 else ''}")
-        if s.assists > 0:
-            parts.append(f"{s.assists} assist{'s' if s.assists != 1 else ''}")
         if s.shots_on_target > 0:
             parts.append(f"{s.shots_on_target} shot{'s' if s.shots_on_target != 1 else ''} on target")
+        if s.xg_value > 0:
+            parts.append(f"xG {s.xg_value:.2f}")
+        if s.assists > 0:
+            parts.append(f"{s.assists} assist{'s' if s.assists != 1 else ''}")
 
     if s.rating_float > 0:
         parts.append(f"rating {s.games.rating}")
@@ -515,25 +687,38 @@ def _build_reason(player: Player, slot: str) -> str:
     if slot == "GK":
         if s.saves > 0:
             lines.append(f"Made {s.saves} save(s).")
+        if s.penalty_saves > 0:
+            lines.append(f"Saved {s.penalty_saves} penalty/penalties.")
         if s.clean_sheet:
             lines.append("Kept a clean sheet.")
     elif slot in ("CB", "RB", "LB", "RWB", "LWB"):
         if s.defensive_actions > 0:
             lines.append(f"{s.defensive_actions} combined tackles + interceptions.")
-    elif slot in ("CDM", "CM"):
+        if s.clearances > 0:
+            lines.append(f"{s.clearances} clearance(s).")
+    elif slot == "CDM":
+        if s.tackles_won + s.interceptions > 0:
+            lines.append(f"{s.tackles_won + s.interceptions} defensive actions.")
+        if s.total_passes > 0:
+            lines.append(f"{s.total_passes} passes ({s.pass_accuracy:.0f}% accuracy).")
+    elif slot in ("CM", "CAM"):
         if s.key_passes > 0:
             lines.append(f"{s.key_passes} key passes created.")
         if s.goal_contributions > 0:
             lines.append(f"{s.goal_contributions} goal contribution(s).")
-        if s.tackles_won > 0:
-            lines.append(f"{s.tackles_won} tackle(s) won.")
-    elif slot in ("CAM", "RW", "LW", "RM", "LM"):
+        if s.xa_value > 0:
+            lines.append(f"xA of {s.xa_value:.2f}.")
+    elif slot in ("RW", "LW", "RM", "LM"):
         if s.goals_scored > 0 or s.assists > 0:
             lines.append(f"{s.goals_scored}G + {s.assists}A.")
+        if s.xg_value > 0:
+            lines.append(f"xG of {s.xg_value:.2f}.")
         if s.dribbles_completed > 0:
             lines.append(f"{s.dribbles_completed} dribble(s) completed.")
     elif slot in ("ST", "CF"):
         lines.append(f"{s.goals_scored} goal(s), {s.shots_on_target} shot(s) on target.")
+        if s.xg_value > 0:
+            lines.append(f"xG of {s.xg_value:.2f}.")
 
     if result_str:
         lines.append(f"Part of a {result_str} team.")
@@ -549,21 +734,22 @@ def save_totw_selection(matchweek: int, totw: TOTWSelection) -> Path:
     return path
 
 
-def print_totw_table(totw: TOTWSelection) -> None:
-    """Print the TOTW selection as a formatted table."""
-    print(f"\n{'='*75}")
-    print(f"PREMIER LEAGUE TEAM OF THE WEEK — MATCHWEEK {totw.matchweek}")
-    print(f"{'='*75}")
-    print(f"Formation: {totw.formation.formation}")
-    print(f"Rationale: {totw.formation.rationale}")
-    print()
-    print(f"{'Pos':<6} {'Player':<28} {'Team':<22} {'Rating':>6}  Key Stat")
-    print("-" * 95)
-    for tp in totw.players:
-        p = tp.player
-        rating = p.stats.games.rating or "N/A"
-        stat_str = tp.key_stat[:35] + "..." if len(tp.key_stat) > 35 else tp.key_stat
-        print(f"{tp.position_slot:<6} {p.name:<28} {p.team_name:<22} {rating:>6}  {stat_str}")
+def print_shortlist_table(shortlist: Shortlist) -> None:
+    """Print the shortlists as a formatted table."""
+    print(f"\n{'='*80}")
+    print(f"PREMIER LEAGUE TOTW SHORTLISTS — MATCHWEEK {shortlist.matchweek}")
+    print(f"Formation: {shortlist.formation}")
+    print(f"{'='*80}")
+
+    for slot in shortlist.slots:
+        print(f"\n[{slot.slot_index}] {slot.position}")
+        print(f"  {'#':<3} {'Player':<28} {'Team':<22} {'Score':>6}  Key Stats")
+        print(f"  {'-'*80}")
+        for c in slot.candidates:
+            stat_items = [f"{k}={v}" for k, v in c.stats.items()
+                          if k not in ("rating", "minutes", "result") and v not in (None, 0, 0.0, False)]
+            stat_str = ", ".join(stat_items[:4])
+            print(f"  {c.rank:<3} {c.player_name:<28} {c.team:<22} {c.score:>6.2f}  {stat_str}")
     print()
 
 
@@ -573,9 +759,8 @@ def main():
         sys.exit(1)
 
     matchweek = int(sys.argv[1])
-    print(f"Evaluating players for matchweek {matchweek}...")
+    print(f"Building shortlists for matchweek {matchweek}...")
 
-    # Load formation
     formation_path = matchweek_analysis_dir(matchweek) / "formation.json"
     formation_data = load_json_cache(formation_path)
     if not formation_data:
@@ -584,22 +769,21 @@ def main():
 
     formation = SelectedFormation(**formation_data)
 
-    # Load all players
     all_players = load_all_players(matchweek)
     print(f"Loaded {len(all_players)} players from cache.")
 
-    # Select TOTW
-    selected = select_players_for_formation(formation, all_players)
+    shortlist = build_shortlists(matchweek, formation, all_players)
 
-    totw = TOTWSelection(
-        matchweek=matchweek,
-        formation=formation,
-        players=selected,
-    )
+    shortlist_path = matchweek_analysis_dir(matchweek) / "shortlists.json"
+    save_json_cache(shortlist_path, shortlist.model_dump())
 
-    out_path = save_totw_selection(matchweek, totw)
-    print_totw_table(totw)
-    print(f"Saved to: {out_path}")
+    # Write empty players.json placeholder — analysts populate it via merge script
+    empty_totw = TOTWSelection(matchweek=matchweek, formation=formation, players=[])
+    save_totw_selection(matchweek, empty_totw)
+
+    print_shortlist_table(shortlist)
+    print(f"Shortlists saved to: {shortlist_path}")
+    print(f"Analysts: review shortlists and write analyst_1/2/3.json, then run merge_analyst_selections.py")
 
 
 if __name__ == "__main__":

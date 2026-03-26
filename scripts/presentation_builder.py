@@ -187,7 +187,14 @@ def _stat(label: str, value, highlight: bool = False) -> dict:
 
 
 def get_display_stats(position_slot: str, player: dict) -> list[dict]:
-    """Return a list of stat dicts for display on the player slide."""
+    """
+    Return a list of stat dicts for display on the player slide.
+
+    Only shows stats that are non-zero / meaningful for the position.
+    Each position has a priority-ordered candidate pool — always-show slots
+    appear regardless of value; show-if-nonzero slots only appear when > 0.
+    Rating is always appended last. Capped at 6 stats total.
+    """
     s = player.get("stats", {})
     games    = s.get("games", {})
     goals    = s.get("goals", {})
@@ -196,93 +203,182 @@ def get_display_stats(position_slot: str, player: dict) -> list[dict]:
     tackles  = s.get("tackles", {})
     duels    = s.get("duels", {})
     dribbles = s.get("dribbles", {})
+    penalty  = s.get("penalty", {})
 
     rating = games.get("rating") or "N/A"
-    minutes = _v(games, "minutes", default=0)
     pos = position_slot.upper()
 
+    def iv(*keys):
+        """Integer value from nested dicts, 0 if missing."""
+        val = s
+        for k in keys:
+            if not isinstance(val, dict):
+                return 0
+            val = val.get(k, 0)
+        return int(val or 0)
+
+    def fv(*keys):
+        val = s
+        for k in keys:
+            if not isinstance(val, dict):
+                return 0.0
+            val = val.get(k, 0)
+        return float(val or 0)
+
+    # Computed derived values
+    saves     = iv("goals", "saves")
+    conceded  = iv("goals", "conceded")
+    goals_v   = iv("goals", "total")
+    assists_v = iv("goals", "assists")
+    tackles_v = iv("tackles", "total")
+    intercept = iv("tackles", "interceptions")
+    clearance = iv("tackles", "clearances")
+    blocks_v  = iv("tackles", "blocks")
+    aerial_w  = iv("duels", "aerial_won")
+    aerial_l  = iv("duels", "aerial_lost")
+    duels_w   = iv("duels", "won")
+    drb_ok    = iv("dribbles", "success")
+    drb_att   = iv("dribbles", "attempts")
+    shots_ot  = iv("shots", "on")
+    shots_tot = iv("shots", "total")
+    key_pass  = iv("passes", "key")
+    tot_pass  = iv("passes", "total")
+    x_crosses = iv("passes", "accurate_crosses")
+    pen_saves = int(penalty.get("saved") or 0)
+    xg        = float(s.get("xg") or 0)
+    xa        = float(s.get("xa") or 0)
+    pass_pct  = fv("passes", "accuracy")
+
+    aerial_rate_str = f"{round(aerial_w / (aerial_w + aerial_l) * 100)}%" if (aerial_w + aerial_l) > 0 else None
+    drb_rate_str    = f"{round(drb_ok / drb_att * 100)}%" if drb_att > 0 else None
+    conv_str        = f"{round(goals_v / shots_tot * 100)}%" if shots_tot > 0 else None
+    pass_acc_str    = f"{pass_pct:.0f}%" if pass_pct > 0 else None
+    xg_str          = f"{xg:.2f}" if xg > 0 else None
+    xa_str          = f"{xa:.2f}" if xa > 0 else None
+
+    # Each entry: (label, display_str, always_show, highlight)
+    # always_show=True → include even if value is 0/falsy
+    # highlight=True   → render in green accent
     if pos == "GK":
-        saves = _v(goals, "saves", default=0)
-        conceded = _v(goals, "conceded", default=0)
-        clean = "Yes" if conceded == 0 else "No"
-        return [
-            _stat("SAVES", saves, highlight=True),
-            _stat("GOALS CONCEDED", conceded),
-            _stat("CLEAN SHEET", clean),
-            _stat("MINUTES", minutes),
-            _stat("MATCH RATING", rating, highlight=True),
+        pool = [
+            ("SAVES",          str(saves),             True,  True),
+            ("GOALS CONCEDED", str(conceded),           True,  conceded == 0),
+            ("CLEAN SHEET",    "Yes" if conceded == 0 else "No", True, conceded == 0),
+            ("PENALTY SAVES",  str(pen_saves),          bool(pen_saves), True),
+            ("PASS ACCURACY",  pass_acc_str,            False, False),
         ]
 
     elif pos == "CB":
-        return [
-            _stat("TACKLES WON",     _v(tackles, "total",         default=0), highlight=True),
-            _stat("INTERCEPTIONS",   _v(tackles, "interceptions",  default=0), highlight=True),
-            _stat("CLEARANCES",      _v(tackles, "clearances",     default=0)),
-            _stat("AERIAL DUELS WON",_v(duels,   "aerial_won",     default=0)),
-            _stat("BLOCKS",          _v(tackles, "blocks",         default=0)),
-            _stat("MATCH RATING",    rating, highlight=True),
+        pool = [
+            ("TACKLES WON",      str(tackles_v),       True,  True),
+            ("INTERCEPTIONS",    str(intercept),       True,  True),
+            ("CLEARANCES",       str(clearance),       bool(clearance), False),
+            ("BLOCKS",           str(blocks_v),        bool(blocks_v),  False),
+            ("AERIAL WON",       str(aerial_w),        bool(aerial_w),  False),
+            ("AERIAL WIN RATE",  aerial_rate_str,      bool(aerial_rate_str and aerial_w), False),
+            ("DUELS WON",        str(duels_w),         bool(duels_w),   False),
+            ("PASS ACCURACY",    pass_acc_str,         False,           False),
         ]
 
-    elif pos in ("RB", "LB", "RWB", "LWB"):
-        def_actions = _v(tackles, "total", default=0) + _v(tackles, "interceptions", default=0)
-        return [
-            _stat("DEF. ACTIONS",   def_actions, highlight=True),
-            _stat("KEY PASSES",      _v(passes,   "key",           default=0)),
-            _stat("ASSISTS",         _v(goals,    "assists",        default=0)),
-            _stat("TACKLES WON",     _v(tackles,  "total",         default=0)),
-            _stat("INTERCEPTIONS",   _v(tackles,  "interceptions",  default=0)),
-            _stat("MATCH RATING",    rating, highlight=True),
+    elif pos in ("RB", "LB"):
+        def_actions = tackles_v + intercept
+        pool = [
+            ("DEF. ACTIONS",   str(def_actions),      True,  True),
+            ("TACKLES WON",    str(tackles_v),        bool(tackles_v), False),
+            ("INTERCEPTIONS",  str(intercept),        bool(intercept), False),
+            ("ASSISTS",        str(assists_v),        bool(assists_v), True),
+            ("KEY PASSES",     str(key_pass),         bool(key_pass),  True),
+            ("ACCURATE CROSSES", str(x_crosses),     bool(x_crosses), False),
+            ("AERIAL WON",     str(aerial_w),         bool(aerial_w),  False),
+            ("xA",             xa_str,                bool(xa_str),    False),
+        ]
+
+    elif pos in ("RWB", "LWB"):
+        pool = [
+            ("ASSISTS",        str(assists_v),        bool(assists_v), True),
+            ("KEY PASSES",     str(key_pass),         bool(key_pass),  True),
+            ("ACCURATE CROSSES", str(x_crosses),     bool(x_crosses), True),
+            ("xA",             xa_str,                bool(xa_str),    False),
+            ("DEF. ACTIONS",   str(tackles_v + intercept), True,      False),
+            ("DRIBBLES",       str(drb_ok),           bool(drb_ok),    False),
         ]
 
     elif pos == "CDM":
-        return [
-            _stat("TACKLES WON",    _v(tackles, "total",         default=0), highlight=True),
-            _stat("INTERCEPTIONS",  _v(tackles, "interceptions",  default=0), highlight=True),
-            _stat("CLEARANCES",     _v(tackles, "clearances",     default=0)),
-            _stat("DUELS WON",      _v(duels,   "won",            default=0)),
-            _stat("PASS ACCURACY",  f"{float(_v(passes, 'accuracy', default=0) or 0):.0f}%"),
-            _stat("MATCH RATING",   rating, highlight=True),
+        pool = [
+            ("TACKLES WON",    str(tackles_v),        True,  True),
+            ("INTERCEPTIONS",  str(intercept),        True,  True),
+            ("CLEARANCES",     str(clearance),        bool(clearance), False),
+            ("DUELS WON",      str(duels_w),          bool(duels_w),   False),
+            ("TOTAL PASSES",   str(tot_pass),         bool(tot_pass),  False),
+            ("PASS ACCURACY",  pass_acc_str,          bool(pass_acc_str and pass_pct >= 70), False),
         ]
 
-    elif pos in ("CM", "CAM"):
-        return [
-            _stat("KEY PASSES",     _v(passes,   "key",      default=0), highlight=True),
-            _stat("GOALS",          _v(goals,    "total",    default=0), highlight=True),
-            _stat("ASSISTS",        _v(goals,    "assists",  default=0)),
-            _stat("PASS ACCURACY",  f"{float(_v(passes, 'accuracy', default=0) or 0):.0f}%"),
-            _stat("TACKLES WON",    _v(tackles,  "total",    default=0)),
-            _stat("MATCH RATING",   rating, highlight=True),
+    elif pos == "CM":
+        pool = [
+            ("KEY PASSES",     str(key_pass),         True,  True),
+            ("GOALS",          str(goals_v),          bool(goals_v),   True),
+            ("ASSISTS",        str(assists_v),        bool(assists_v), True),
+            ("xA",             xa_str,                bool(xa_str),    False),
+            ("TOTAL PASSES",   str(tot_pass),         bool(tot_pass >= 50), False),
+            ("PASS ACCURACY",  pass_acc_str,          bool(pass_acc_str and pass_pct >= 75), False),
+            ("TACKLES WON",    str(tackles_v),        bool(tackles_v), False),
+        ]
+
+    elif pos == "CAM":
+        pool = [
+            ("KEY PASSES",     str(key_pass),         True,  True),
+            ("GOALS",          str(goals_v),          bool(goals_v),   True),
+            ("ASSISTS",        str(assists_v),        bool(assists_v), True),
+            ("xA",             xa_str,                bool(xa_str),    True),
+            ("xG",             xg_str,                bool(xg_str),    False),
+            ("DRIBBLES",       str(drb_ok),           bool(drb_ok),    False),
+            ("SHOTS ON TARGET",str(shots_ot),         bool(shots_ot),  False),
         ]
 
     elif pos in ("RM", "LM", "RW", "LW"):
-        return [
-            _stat("GOALS",          _v(goals,    "total",    default=0), highlight=True),
-            _stat("ASSISTS",        _v(goals,    "assists",  default=0), highlight=True),
-            _stat("KEY PASSES",     _v(passes,   "key",      default=0)),
-            _stat("DRIBBLES",       _v(dribbles, "success",  default=0)),
-            _stat("SHOTS ON TARGET",_v(shots,    "on",       default=0)),
-            _stat("MATCH RATING",   rating, highlight=True),
+        pool = [
+            ("GOALS",          str(goals_v),          bool(goals_v),   True),
+            ("ASSISTS",        str(assists_v),        bool(assists_v), True),
+            ("xG",             xg_str,                bool(xg_str),    bool(not goals_v)),
+            ("xA",             xa_str,                bool(xa_str),    False),
+            ("DRIBBLES",       str(drb_ok),           bool(drb_ok),    False),
+            ("DRIBBLE RATE",   drb_rate_str,          bool(drb_rate_str and drb_ok >= 2), False),
+            ("KEY PASSES",     str(key_pass),         bool(key_pass),  False),
+            ("ACCURATE CROSSES", str(x_crosses),     bool(x_crosses), False),
+            ("SHOTS ON TARGET",str(shots_ot),         bool(shots_ot),  False),
         ]
 
     elif pos in ("ST", "CF"):
-        total_shots = _v(shots, "total", default=0)
-        goals_val   = _v(goals, "total", default=0)
-        conversion  = f"{round(goals_val / total_shots * 100)}%" if total_shots > 0 else "0%"
-        return [
-            _stat("GOALS",          goals_val, highlight=True),
-            _stat("SHOTS ON TARGET",_v(shots, "on",       default=0), highlight=True),
-            _stat("ASSISTS",        _v(goals,  "assists",  default=0)),
-            _stat("SHOT CONVERSION",conversion),
-            _stat("TOTAL SHOTS",    total_shots),
-            _stat("MATCH RATING",   rating, highlight=True),
+        pool = [
+            ("GOALS",          str(goals_v),          True,  True),
+            ("SHOTS ON TARGET",str(shots_ot),         True,  True),
+            ("xG",             xg_str,                bool(xg_str),    bool(not goals_v)),
+            ("SHOT CONVERSION",conv_str,              bool(conv_str and shots_tot > 0), False),
+            ("ASSISTS",        str(assists_v),        bool(assists_v), False),
+            ("AERIAL WON",     str(aerial_w),         bool(aerial_w),  False),
+            ("AERIAL WIN RATE",aerial_rate_str,       bool(aerial_rate_str and aerial_w >= 2), False),
         ]
 
-    # Fallback
-    return [
-        _stat("GOALS",   _v(goals, "total",   default=0), highlight=True),
-        _stat("ASSISTS",  _v(goals, "assists", default=0)),
-        _stat("MATCH RATING", rating, highlight=True),
-    ]
+    else:
+        pool = [
+            ("GOALS",    str(goals_v),   bool(goals_v),   True),
+            ("ASSISTS",  str(assists_v), bool(assists_v), False),
+            ("KEY PASSES", str(key_pass), bool(key_pass), False),
+        ]
+
+    # Filter: keep if always_show=True OR display_str is truthy (non-zero/non-None)
+    result = []
+    for label, display_str, include, highlight in pool:
+        if not include:
+            continue
+        if display_str is None or display_str in ("0", "0%", "0.00"):
+            continue
+        result.append(_stat(label, display_str, highlight))
+
+    # Always append rating last
+    result.append(_stat("MATCH RATING", rating, highlight=True))
+
+    return result[:6]
 
 
 # ---------------------------------------------------------------------------
@@ -376,30 +472,65 @@ def load_presentation_data(matchweek: int) -> dict:
     # Formation details for slide 4
     formation_usages = formation_data.get("usages", [])
 
-    # Winning teams (teams in the selected formation that won)
+    # Add win_rate to each usage for bar visualization
+    for u in formation_usages:
+        u["win_rate"] = round(u["win_count"] / u["usage_count"] * 100) if u["usage_count"] > 0 else 0
+
+    # Build fixture result lookup: team_name → result string
+    fixture_result_map: dict[str, str] = {}
+    team_logo_map: dict[str, str] = {}
+    for f in fixtures_raw:
+        hn = f["teams"]["home"]["name"]
+        an = f["teams"]["away"]["name"]
+        hs = f["goals"]["home"]
+        as_ = f["goals"]["away"]
+        team_logo_map[hn] = f["teams"]["home"]["logo"]
+        team_logo_map[an] = f["teams"]["away"]["logo"]
+        if hs is not None and as_ is not None:
+            if hs > as_:
+                fixture_result_map[hn] = f"{hs}–{as_} vs {an}"
+            elif as_ > hs:
+                fixture_result_map[an] = f"{as_}–{hs} vs {hn}"
+
+    # Winning teams with logos and match result strings
     selected_formation_usages = [u for u in formation_usages if u["formation"] == formation_str]
     winning_teams = []
     if selected_formation_usages:
-        teams_in_formation = selected_formation_usages[0].get("teams", [])
-        # Get logos from fixtures
-        team_logo_map = {}
-        for f in fixtures_raw:
-            team_logo_map[f["teams"]["home"]["name"]] = f["teams"]["home"]["logo"]
-            team_logo_map[f["teams"]["away"]["name"]] = f["teams"]["away"]["logo"]
-        for tn in teams_in_formation:
-            winning_teams.append({"name": tn, "logo": team_logo_map.get(tn, "")})
+        for tn in selected_formation_usages[0].get("teams", []):
+            winning_teams.append({
+                "name":       tn,
+                "logo":       team_logo_map.get(tn, ""),
+                "result_str": fixture_result_map.get(tn, ""),
+            })
+
+    # Formation mini-pitch dots for SVG diagram
+    def _formation_dots(fmt: str) -> list[dict]:
+        try:
+            layers = [int(x) for x in fmt.split("-")]
+        except ValueError:
+            return []
+        all_layers = [1] + layers  # prepend GK
+        n = len(all_layers)
+        dots = []
+        for i, count in enumerate(all_layers):
+            y = round(122 - (122 - 12) * i / (n - 1), 1)
+            for j in range(count):
+                x = round((j + 1) / (count + 1) * 100, 1)
+                dots.append({"x": x, "y": y})
+        return dots
 
     return {
-        "matchweek":          matchweek,
-        "next_matchweek":     next_mw,
-        "season":             totw.get("season", "2025/26") if isinstance(totw, dict) else "2025/26",
-        "formation":          formation_str,
+        "matchweek":           matchweek,
+        "next_matchweek":      next_mw,
+        "season":              totw.get("season", "2025/26") if isinstance(totw, dict) else "2025/26",
+        "formation":           formation_str,
         "formation_rationale": formation_data.get("rationale", ""),
-        "formation_usages":   formation_usages,
-        "winning_teams":      winning_teams,
-        "fixtures":           fixtures,
-        "next_fixtures":      next_fixtures,
-        "players":            players,
+        "formation_usages":    formation_usages,
+        "winning_teams":       winning_teams,
+        "formation_dots":      _formation_dots(formation_str),
+        "fixtures":            fixtures,
+        "next_fixtures":       next_fixtures,
+        "players":             players,
     }
 
 

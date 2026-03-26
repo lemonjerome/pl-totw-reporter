@@ -244,119 +244,235 @@ body {
 
 /* ===================== SLIDE: FORMATION EXPLANATION ===================== */
 .slide-formation {
-  padding: 44px 60px;
-  background: linear-gradient(160deg, #37003c 60%, #1a001f 100%);
+  background: linear-gradient(160deg, #37003c 55%, #1a001f 100%);
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
+  grid-template-columns: 310px 1fr 310px;
   position: relative;
   overflow: hidden;
 }
+
+/* Top accent bar */
 .slide-formation::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 4px;
-  background: linear-gradient(to right, var(--magenta), transparent 60%);
+  background: linear-gradient(to right, var(--magenta), var(--green) 60%, transparent);
+  z-index: 2;
 }
-.slide-formation::after {
-  content: '';
+
+/* Giant watermark formation text */
+.formation-watermark {
   position: absolute;
-  top: -100px; right: -100px;
-  width: 380px; height: 380px;
-  border-radius: 50%;
-  border: 1px solid rgba(0,255,135,0.08);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 320px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.025);
+  letter-spacing: -10px;
   pointer-events: none;
+  white-space: nowrap;
+  user-select: none;
+  z-index: 0;
 }
-.formation-left {}
+
+/* ---- LEFT COLUMN ---- */
+.formation-left {
+  padding: 40px 28px 40px 40px;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  border-right: 1px solid rgba(255,255,255,0.07);
+}
+.formation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.formation-badge-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--magenta);
+}
+.formation-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--grey);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
 .formation-name-big {
   font-size: 80px;
   font-weight: 900;
   color: var(--green);
   line-height: 1;
+  margin-bottom: 6px;
 }
-.formation-label {
-  font-size: 14px;
+.formation-name-sub {
+  font-size: 15px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+}
+.formation-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin-bottom: 20px;
+}
+.formation-usage-label {
+  font-size: 13px;
   font-weight: 700;
   color: var(--grey);
-  letter-spacing: 4px;
+  letter-spacing: 3px;
   text-transform: uppercase;
-  margin-bottom: 8px;
-}
-.formation-sep {
-  width: 60px;
-  height: 3px;
-  background: var(--green);
-  margin: 20px 0;
-  border-radius: 2px;
+  margin-bottom: 14px;
 }
 .formation-usage-table {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 10px;
+  flex: 1;
 }
 .usage-row {
   display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.usage-row-top {
+  display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 9px 14px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 6px;
+  justify-content: space-between;
 }
 .usage-formation {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--white);
-  min-width: 70px;
-}
-.usage-wins {
-  font-size: 13px;
-  color: var(--green);
-  font-weight: 700;
-  min-width: 60px;
-}
-.usage-teams {
-  font-size: 12px;
-  color: var(--grey);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.formation-right {}
-.formation-header {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--white);
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-bottom: 14px;
-}
-.formation-rationale {
   font-size: 17px;
-  color: var(--grey);
-  line-height: 1.6;
+  font-weight: 700;
+  color: var(--white);
 }
-.formation-winners {
-  margin-top: 22px;
+.usage-formation.selected {
+  color: var(--green);
+}
+.usage-meta {
+  font-size: 13px;
+  color: var(--grey);
+}
+.usage-bar-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--grey);
+  transition: width 0.3s;
+}
+.usage-bar-fill.selected {
+  background: linear-gradient(to right, var(--magenta), var(--green));
+}
+
+/* ---- CENTER COLUMN: Mini Pitch ---- */
+.formation-center {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.winner-row {
-  display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  z-index: 1;
+  gap: 16px;
+}
+.formation-center-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.mini-pitch-wrap {
+  position: relative;
+  width: 220px;
+}
+.mini-pitch-svg {
+  width: 220px;
+  height: 300px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: block;
+  filter: drop-shadow(0 8px 32px rgba(0,0,0,0.6));
+}
+
+/* ---- RIGHT COLUMN ---- */
+.formation-right {
+  padding: 40px 40px 40px 28px;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  border-left: 1px solid rgba(255,255,255,0.07);
+}
+.formation-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--grey);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.formation-rationale {
+  font-size: 18px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.65;
+  margin-bottom: 28px;
+  flex: 1;
+}
+.formation-winners-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--grey);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.formation-winners {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
+.winner-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  border: 1px solid rgba(0,255,135,0.15);
+}
 .winner-badge {
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
+  flex-shrink: 0;
+}
+.winner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
 }
 .winner-name {
-  font-size: 15px;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.winner-result {
+  font-size: 14px;
+  color: var(--green);
   font-weight: 600;
 }
 
@@ -454,13 +570,13 @@ body {
   border: 1px solid rgba(255,255,255,0.2);
 }
 .player-nationality {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--grey);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
 .player-name {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 900;
   color: var(--white);
   text-align: center;
@@ -468,7 +584,7 @@ body {
   line-height: 1.2;
 }
 .player-team-name {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--grey);
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -478,11 +594,11 @@ body {
   margin-top: 14px;
   background: var(--green);
   color: var(--dark-grey);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 3px;
-  padding: 5px 18px;
+  padding: 6px 20px;
   border-radius: 20px;
 }
 
@@ -529,25 +645,25 @@ body {
   z-index: 0;
 }
 .player-position-title {
-  font-size: 38px;
+  font-size: 46px;
   font-weight: 900;
   color: var(--magenta);
   text-transform: uppercase;
   letter-spacing: 3px;
   line-height: 1;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .player-full-name-right {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--white);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .player-key-stat {
-  font-size: 14px;
+  font-size: 17px;
   color: var(--green);
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 .stats-sep {
   width: 100%;
@@ -566,14 +682,14 @@ body {
   gap: 2px;
 }
 .stat-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--grey);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
 .stat-value {
-  font-size: 32px;
+  font-size: 38px;
   font-weight: 900;
   color: var(--white);
   line-height: 1;
@@ -581,10 +697,10 @@ body {
 .stat-value.highlight { color: var(--green); }
 .stat-value.rating-val {
   color: var(--green);
-  font-size: 36px;
+  font-size: 44px;
 }
 .stat-value.small {
-  font-size: 22px;
+  font-size: 26px;
 }
 
 /* ===================== DIAGRAM + NEXT FIXTURES ===================== */
@@ -710,31 +826,92 @@ body {
 
 <!-- ========== SLIDE 4: FORMATION EXPLANATION ========== -->
 <div class="slide slide-formation">
+  <!-- Giant watermark -->
+  <div class="formation-watermark">{{ formation }}</div>
+
+  <!-- LEFT: Formation name + usage breakdown -->
   <div class="formation-left">
-    <div class="formation-label">Selected Formation</div>
+    <div class="formation-badge">
+      <div class="formation-badge-dot"></div>
+      <div class="formation-label">Selected Formation</div>
+    </div>
     <div class="formation-name-big">{{ formation }}</div>
-    <div class="formation-sep"></div>
-    <div class="formation-label">All Formations Used</div>
+    <div class="formation-name-sub">Most used by winning teams</div>
+    <div class="formation-divider"></div>
+    <div class="formation-usage-label">All Formations Used</div>
     <div class="formation-usage-table">
-      {% for u in formation_usages %}
+      {% for u in formation_usages[:7] %}
       <div class="usage-row">
-        <span class="usage-formation">{{ u.formation }}</span>
-        <span class="usage-wins">{{ u.win_count }}W / {{ u.usage_count }}G</span>
-        <span class="usage-teams">{{ u.teams | join(', ') if u.teams else '—' }}</span>
+        <div class="usage-row-top">
+          <span class="usage-formation {% if u.formation == formation %}selected{% endif %}">{{ u.formation }}</span>
+          <span class="usage-meta">{{ u.win_count }}W · {{ u.usage_count }} games</span>
+        </div>
+        <div class="usage-bar-track">
+          <div class="usage-bar-fill {% if u.formation == formation %}selected{% endif %}"
+               style="width: {{ u.win_rate }}%"></div>
+        </div>
       </div>
       {% endfor %}
     </div>
   </div>
+
+  <!-- CENTER: Mini tactical pitch diagram -->
+  <div class="formation-center">
+    <div class="formation-center-label">Tactical Shape</div>
+    <div class="mini-pitch-wrap">
+      <svg class="mini-pitch-svg" viewBox="0 0 100 136" xmlns="http://www.w3.org/2000/svg">
+        <!-- Pitch background -->
+        <rect width="100" height="136" fill="#1a6b30"/>
+        <!-- Pitch lines -->
+        <rect x="8" y="4" width="84" height="128" rx="2" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.8"/>
+        <!-- Halfway line -->
+        <line x1="8" y1="68" x2="92" y2="68" stroke="rgba(255,255,255,0.2)" stroke-width="0.6"/>
+        <!-- Center circle -->
+        <circle cx="50" cy="68" r="12" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.6"/>
+        <circle cx="50" cy="68" r="1.2" fill="rgba(255,255,255,0.3)"/>
+        <!-- Top penalty box -->
+        <rect x="22" y="4" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.6"/>
+        <rect x="34" y="4" width="32" height="10" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.6"/>
+        <!-- Bottom penalty box -->
+        <rect x="22" y="112" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.6"/>
+        <rect x="34" y="122" width="32" height="10" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.6"/>
+        <!-- Alternating grass stripes (subtle) -->
+        {% for i in range(7) %}
+        <rect x="8" y="{{ 4 + i * 18.3 }}" width="84" height="9.1" fill="rgba(255,255,255,0.018)" rx="0"/>
+        {% endfor %}
+        <!-- Position dots -->
+        {% for dot in formation_dots %}
+        <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="5.5"
+                fill="#00ff87" stroke="#37003c" stroke-width="1.2"
+                filter="url(#glow)"/>
+        {% endfor %}
+        <!-- Glow filter -->
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- RIGHT: Rationale + winning teams -->
   <div class="formation-right">
     <div class="formation-header">Why this formation?</div>
     <div class="formation-rationale">{{ formation_rationale }}</div>
     {% if winning_teams %}
-    <div class="formation-winners" style="margin-top:24px">
-      <div class="formation-label">Winning Teams</div>
+    <div class="formation-winners-header">Winning Teams</div>
+    <div class="formation-winners">
       {% for team in winning_teams %}
-      <div class="winner-row">
+      <div class="winner-card">
         <img class="winner-badge" src="{{ team.logo }}" onerror="this.style.display='none'">
-        <span class="winner-name">{{ team.name }}</span>
+        <div class="winner-info">
+          <div class="winner-name">{{ team.name }}</div>
+          {% if team.result_str %}
+          <div class="winner-result">{{ team.result_str }}</div>
+          {% endif %}
+        </div>
       </div>
       {% endfor %}
     </div>
