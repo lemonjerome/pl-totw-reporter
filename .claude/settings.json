@@ -33,7 +33,7 @@
     "API_FOOTBALL_BASE_URL": "https://v3.football.api-sports.io",
     "PL_LEAGUE_ID": "39",
     "PL_SEASON": "2024",
-    "PROJECT_EMAIL": "24hrnts@gmail.com",
+    "PROJECT_EMAIL": "your-email@gmail.com",
     "DATA_DIR": "data",
     "OUTPUT_DIR": "output"
   },

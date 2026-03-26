@@ -71,11 +71,11 @@ Read `data/2025-26/matchweek-{N}/fixtures.json` and extract all fixture IDs.
 
 **3c. Spawn all 3 `researcher-fetcher` agents in a SINGLE message (parallel):**
 
-Agent 1 prompt: `Matchweek: {N}. Your fixture IDs: {id1} {id2} {id3} {id4} — run fetch-players-subset and fetch-lineups-subset for these IDs from /Users/gabrielramos/Desktop/PL-team-builder`
+Agent 1 prompt: `Matchweek: {N}. Your fixture IDs: {id1} {id2} {id3} {id4} — run fetch-players-subset and fetch-lineups-subset for these IDs from {PROJECT_ROOT}`
 
-Agent 2 prompt: `Matchweek: {N}. Your fixture IDs: {id5} {id6} {id7} — run fetch-players-subset and fetch-lineups-subset for these IDs from /Users/gabrielramos/Desktop/PL-team-builder`
+Agent 2 prompt: `Matchweek: {N}. Your fixture IDs: {id5} {id6} {id7} — run fetch-players-subset and fetch-lineups-subset for these IDs from {PROJECT_ROOT}`
 
-Agent 3 prompt: `Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10} — run fetch-players-subset and fetch-lineups-subset for these IDs from /Users/gabrielramos/Desktop/PL-team-builder`
+Agent 3 prompt: `Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10} — run fetch-players-subset and fetch-lineups-subset for these IDs from {PROJECT_ROOT}`
 
 Wait for all 3 to complete.
 
@@ -156,6 +156,6 @@ This single command handles everything: folder creation, 5 file uploads, GSheet 
 📊 Team: {Formation} — {list key players briefly}
 🖼️  Diagram: output/matchweek-{N}/totw_diagram.png
 📑 Slides: output/matchweek-{N}/presentation.pdf
-📧 Email: ⚽ PL TOTW — Matchweek {N} → 24hrnts@gmail.com
+📧 Email: ⚽ PL TOTW — Matchweek {N} → your-email@gmail.com
 ☁️  GDrive: My Drive/EPL TOTW Reporter/2025-26/matchweek-{NN}/
 ```

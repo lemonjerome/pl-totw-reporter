@@ -29,6 +29,7 @@ from pathlib import Path
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 TOKEN_PATH = Path.home() / ".config" / "pl-totw" / "gmail_token.json"
+PROJECT_EMAIL = os.environ.get("PROJECT_EMAIL", "you@gmail.com")
 
 
 def _get_credentials():
@@ -128,7 +129,7 @@ def _build_message(matchweek: int) -> bytes:
     html_body = html_path.read_text(encoding="utf-8")
 
     msg = MIMEMultipart("mixed")
-    msg["To"] = "24hrnts@gmail.com"
+    msg["To"] = PROJECT_EMAIL
     msg["Subject"] = f"\u26bd PL TOTW \u2014 Matchweek {matchweek}"
 
     # HTML body
@@ -185,8 +186,8 @@ def main():
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     print(f"\nEmail sent")
-    print(f"  From:       24hrnts@gmail.com")
-    print(f"  To:         24hrnts@gmail.com")
+    print(f"  From:       {PROJECT_EMAIL}")
+    print(f"  To:         {PROJECT_EMAIL}")
     print(f"  Subject:    \u26bd PL TOTW \u2014 Matchweek {matchweek}")
     print(f"  Attachment: PL-TOTW-Matchweek-{matchweek}.pdf")
     print(f"  Message ID: {msg_id}")

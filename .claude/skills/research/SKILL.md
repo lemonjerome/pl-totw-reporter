@@ -85,7 +85,7 @@ Each agent prompt (fill in real IDs from step 3):
 **Agent 1 prompt:**
 ```
 Matchweek: {N}. Your fixture IDs: {id1} {id2} {id3} {id4}
-Run from /Users/gabrielramos/Desktop/PL-team-builder:
+Run from {PROJECT_ROOT}:
   python3 scripts/soccerdata_client.py fetch-players-subset {N} {id1} {id2} {id3} {id4}
   python3 scripts/soccerdata_client.py fetch-lineups-subset {N} {id1} {id2} {id3} {id4}
 Report when done.
@@ -94,7 +94,7 @@ Report when done.
 **Agent 2 prompt:**
 ```
 Matchweek: {N}. Your fixture IDs: {id5} {id6} {id7}
-Run from /Users/gabrielramos/Desktop/PL-team-builder:
+Run from {PROJECT_ROOT}:
   python3 scripts/soccerdata_client.py fetch-players-subset {N} {id5} {id6} {id7}
   python3 scripts/soccerdata_client.py fetch-lineups-subset {N} {id5} {id6} {id7}
 Report when done.
@@ -103,7 +103,7 @@ Report when done.
 **Agent 3 prompt:**
 ```
 Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10}
-Run from /Users/gabrielramos/Desktop/PL-team-builder:
+Run from {PROJECT_ROOT}:
   python3 scripts/soccerdata_client.py fetch-players-subset {N} {id8} {id9} {id10}
   python3 scripts/soccerdata_client.py fetch-lineups-subset {N} {id8} {id9} {id10}
 Report when done.

@@ -16,6 +16,7 @@ Output:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from scripts.presentation_builder import _diagram_data_uri, load_presentation_da
 from scripts.utils import matchweek_output_dir
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+PROJECT_EMAIL = os.environ.get("PROJECT_EMAIL", "you@gmail.com")
 
 
 def build_email(matchweek: int) -> Path:
@@ -64,6 +66,7 @@ def build_email(matchweek: int) -> Path:
         "fixtures":            data["fixtures"],
         "players":             email_players,
         "diagram_data_uri":    diagram_uri,
+        "project_email":       PROJECT_EMAIL,
     }
 
     # Render template
@@ -87,8 +90,8 @@ def build_email(matchweek: int) -> Path:
 
     print(f"\nReady to send:")
     print(f"  Subject:    ⚽ PL TOTW — Matchweek {matchweek}")
-    print(f"  From:       24hrnts@gmail.com")
-    print(f"  To:         24hrnts@gmail.com")
+    print(f"  From:       {PROJECT_EMAIL}")
+    print(f"  To:         {PROJECT_EMAIL}")
     print(f"  Body:       {email_path}")
     print(f"  Attachment: {pdf_path} ({pdf_mb})")
     print(f"  Rename to:  PL-TOTW-Matchweek-{matchweek}.pdf")

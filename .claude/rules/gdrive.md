@@ -122,7 +122,7 @@ Token cached at `~/.config/pl-totw/drive_token.json` — browser consent on firs
 ### GDrive MCP auth (`@isaacphi/mcp-gdrive`)
 1. Download OAuth Desktop App credentials JSON from Google Cloud Console
 2. Save as `~/.config/mcp-gdrive/gcp-oauth.keys.json`
-3. Add to `settings.local.json`: `"GDRIVE_CREDS_DIR": "/Users/gabrielramos/.config/mcp-gdrive"`
+3. Add to `settings.local.json`: `"GDRIVE_CREDS_DIR": "~/.config/mcp-gdrive"`
 4. On first MCP tool use, a browser opens for OAuth consent — token saved to `GDRIVE_CREDS_DIR`
 
 ---

@@ -26,7 +26,7 @@ python3 scripts/soccerdata_client.py fetch-lineups-subset {matchweek} {fixture_i
 
 ## Rules
 
-- Run both commands from the project root (`/Users/gabrielramos/Desktop/PL-team-builder`)
+- Run both commands from the project root (`{PROJECT_ROOT}`)
 - Do NOT fetch players for other fixtures — only your assigned IDs
 - Do NOT run `fetch-players` or `fetch-lineups` (these fetch ALL fixtures)
 - If a file already exists in cache, the script will skip it automatically — no action needed

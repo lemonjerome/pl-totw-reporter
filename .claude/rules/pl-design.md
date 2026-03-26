@@ -129,7 +129,7 @@ Use simple fade or cut transitions. No flashy animations.
 │  [View Full Report Button] →            │  ← Magenta CTA (#e90052)
 │                                         │
 ├─────────────────────────────────────────┤
-│  Sent from 24hrnts@gmail.com            │  ← Purple footer
+│  Sent from your-email@gmail.com            │  ← Purple footer
 │  © Premier League TOTW Builder          │
 └─────────────────────────────────────────┘
 ```

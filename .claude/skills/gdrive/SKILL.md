@@ -65,5 +65,5 @@ The Python script uses OAuth credentials from `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE
 
 For the `gdrive` MCP server (read-only tools), first-time setup:
 1. Place `gcp-oauth.keys.json` in `~/.config/mcp-gdrive/`
-2. Add `GDRIVE_CREDS_DIR=/Users/gabrielramos/.config/mcp-gdrive` to `settings.local.json`
+2. Add `GDRIVE_CREDS_DIR=~/.config/mcp-gdrive` to `settings.local.json`
 3. On first MCP tool call, a browser window opens for OAuth consent

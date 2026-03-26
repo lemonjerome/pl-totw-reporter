@@ -70,8 +70,8 @@ Output: `output/matchweek-{N}/totw-presentation.pdf`
 ### 3. Email Delivery
 Use Google Workspace MCP tools to send the TOTW email:
 
-- **From**: 24hrnts@gmail.com
-- **To**: 20gabramos04@gmail.com
+- **From**: your-email@gmail.com
+- **To**: your-email@gmail.com
 - **Subject**: `⚽ Premier League TOTW — Matchweek {N} is here!`
 - **Body**: PL-styled HTML (see template at `templates/email.html`)
   - Enthusiastic, short (3-4 sentences max)

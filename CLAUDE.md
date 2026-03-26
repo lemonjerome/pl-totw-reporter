@@ -4,7 +4,7 @@ Automated EPL TOTW system. Fetches 2025-26 match data via soccerdata (FPL + Sofa
 
 ## Project Details
 
-- **From/To email**: 24hrnts@gmail.com
+- **From/To email**: your-email@gmail.com
 - **Data source**: `soccerdata` library — FPL API (fixtures) + SofaScore API (player stats). No API key required.
 - **API-Football**: Legacy — covers seasons 2022–2024 only. Use `scripts/api_football.py` for historical data. Script: `scripts/soccerdata_client.py` for 2025-26.
 

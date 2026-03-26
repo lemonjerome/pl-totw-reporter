@@ -1,6 +1,6 @@
 ---
 name: email
-description: Send the TOTW email via Gmail MCP (send_email tool). PL-styled HTML email with inline diagram, results table, TOTW XI, and PDF attachment. Self-sent from/to 24hrnts@gmail.com. Run after /presentation. Usage: /email [matchweek_number]
+description: Send the TOTW email via Gmail MCP (send_email tool). PL-styled HTML email with inline diagram, results table, TOTW XI, and PDF attachment. Self-sent from/to your-email@gmail.com. Run after /presentation. Usage: /email [matchweek_number]
 ---
 
 # Email — Send TOTW via Gmail
@@ -42,8 +42,8 @@ After the send call succeeds, print:
 
 ```
 Email sent ✅
-  From:       24hrnts@gmail.com
-  To:         24hrnts@gmail.com
+  From:       your-email@gmail.com
+  To:         your-email@gmail.com
   Subject:    ⚽ PL TOTW — Matchweek $ARGUMENTS
   Attachment: PL-TOTW-Matchweek-$ARGUMENTS.pdf
   Timestamp:  {datetime}
