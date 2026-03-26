@@ -2,6 +2,16 @@
 
 Rules for storing EPL TOTW outputs in Google Drive and logging season stats to a GSheet.
 
+## How Uploads Work
+
+All Drive uploads and GSheet writes are handled by **`scripts/gdrive_uploader.py`** (Python, Google Drive API v3 + Sheets API v4). The `@isaacphi/mcp-gdrive` MCP server is read-only and cannot upload files.
+
+```bash
+python3 scripts/gdrive_uploader.py {N}
+```
+
+---
+
 ## Folder Structure
 
 ```
@@ -22,7 +32,6 @@ My Drive/
 ### Folder Naming Convention
 
 Matchweek folders are **always zero-padded to 2 digits**: `matchweek-01` through `matchweek-38`.
-This ensures correct lexicographic sort order in Drive.
 
 ```python
 folder_name = f"matchweek-{matchweek:02d}"
@@ -83,63 +92,38 @@ Use `""` for `null`/`None` values. Do not round — use raw values.
 
 ---
 
-## GDrive-First Cache Rule (Research Skill)
-
-Before fetching any data from SofaScore/FPL, the research skill checks GDrive for cached analysis outputs.
-
-**Algorithm (Step 0 of /research)**:
-1. Use Drive MCP to navigate to `EPL TOTW Reporter / 2025-26 / matchweek-{NN}/`.
-2. List files in that folder.
-3. Check whether **both** `players.json` **and** `formation.json` are present.
-
-**Cache HIT** (both files exist):
-- Download `players.json` → `output/matchweek-N/analysis/players.json`
-- Download `formation.json` → `output/matchweek-N/analysis/formation.json`
-- Print: `GDrive cache hit ✅ Matchweek N — skipping fetch pipeline`
-- Jump directly to Step 7 (verify).
-
-**Cache MISS** (either file absent):
-- Print: `GDrive cache miss — running full fetch pipeline.`
-- Continue with Step 1 (fixture status check).
-
-**Drive unavailable** (MCP not connected / auth error):
-- Print a warning and continue with Step 1. Never block the pipeline.
-
----
-
 ## File Overwrite Policy
 
-When uploading to Drive, always check if a file with the same name exists in the target folder and **delete the old version before uploading**. This prevents duplicate files accumulating in Drive.
+`scripts/gdrive_uploader.py` always deletes any existing file with the same name before uploading. This prevents duplicate files accumulating in Drive.
 
 ---
 
-## Authentication Setup (one-time)
+## MCP Server: `@isaacphi/mcp-gdrive` (read-only)
 
-The `google-workspace-mcp` server in `.mcp.json` handles Gmail, Drive, and Sheets. Gmail is already authorized. Drive and Sheets require additional OAuth scopes.
+The `gdrive` MCP server provides **read and search** tools only:
 
-### Step 1 — Enable APIs
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → your project.
-2. **APIs & Services → Library** → enable:
-   - **Google Drive API**
-   - **Google Sheets API**
+| Tool | Purpose |
+|------|---------|
+| `gdrive_search` | Search files/folders by name or query |
+| `gdrive_read_file` | Read file contents (Sheets → CSV, Docs → Markdown) |
+| `gsheets_read` | Read spreadsheet ranges |
+| `gsheets_update_cell` | Update a single cell (ad-hoc only) |
 
-### Step 2 — Add OAuth Scopes
-1. **APIs & Services → OAuth consent screen → Edit App → Scopes**.
-2. Add:
-   - `https://www.googleapis.com/auth/drive`
-   - `https://www.googleapis.com/auth/spreadsheets`
-3. Save.
+**These tools cannot upload, delete, or move files.** Never use them for the upload workflow.
 
-### Step 3 — Delete Existing Token
-The current token was issued only for Gmail. Delete it so the MCP re-authenticates with expanded scopes:
-```bash
-find ~ -name "*google*token*" 2>/dev/null
-# Delete the token file found, e.g.:
-rm ~/.config/google-workspace-mcp/token.json
-```
+---
 
-### Step 4 — Re-authorize
-Restart Claude Code. On first use of a Drive or Sheets MCP tool, a browser window will open for consent. Approve all requested scopes.
+## Authentication Setup
+
+### Python script auth (`scripts/gdrive_uploader.py`)
+Uses `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET` from `settings.local.json`.
+Token cached at `~/.config/pl-totw/drive_token.json` — browser consent on first run only.
+
+### GDrive MCP auth (`@isaacphi/mcp-gdrive`)
+1. Download OAuth Desktop App credentials JSON from Google Cloud Console
+2. Save as `~/.config/mcp-gdrive/gcp-oauth.keys.json`
+3. Add to `settings.local.json`: `"GDRIVE_CREDS_DIR": "/Users/gabrielramos/.config/mcp-gdrive"`
+4. On first MCP tool use, a browser opens for OAuth consent — token saved to `GDRIVE_CREDS_DIR`
 
 ---
 
@@ -147,8 +131,7 @@ Restart Claude Code. On first use of a Drive or Sheets MCP tool, a browser windo
 
 | Error | Fix |
 |-------|-----|
-| "insufficient permission" on Drive/Sheets | Add Drive/Sheets scopes and re-authenticate (Step 2–4 above) |
-| Folder not found | Agent must create it — absence is not an error |
-| players.json not in Drive | GDrive cache miss — run full research pipeline |
-| Spreadsheet not found | Agent creates it on first use — not an error |
-| Duplicate files in folder | Delete old file before uploading (see overwrite policy) |
+| "insufficient permission" | Re-run Python script — it will re-authenticate |
+| Folder not found | Script auto-creates it |
+| Spreadsheet not found | Script auto-creates it on first use |
+| Duplicate files in folder | Script deletes old file before uploading (automatic) |

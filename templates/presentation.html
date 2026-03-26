@@ -98,52 +98,80 @@ body {
 
 /* ===================== SLIDE 2: RESULTS ===================== */
 .slide-results {
-  padding: 40px 60px;
-  background: linear-gradient(160deg, #37003c 60%, #2D0032 100%);
+  padding: 24px 52px 20px 52px;
+  background: linear-gradient(160deg, #37003c 0%, #2D0032 100%);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.slide-results::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(to right, var(--green) 0%, var(--magenta) 55%, transparent 100%);
+}
+.slide-results::after {
+  content: '';
+  position: absolute;
+  bottom: -120px; right: -120px;
+  width: 400px; height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,255,135,0.06) 0%, transparent 70%);
+  pointer-events: none;
 }
 .results-header {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 32px;
+  margin-bottom: 14px;
   border-left: 5px solid var(--green);
   padding-left: 18px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 .results-header-main {
-  font-size: 36px;
+  font-size: 34px;
   font-weight: 900;
   color: var(--white);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
 .results-header-sub {
-  font-size: 36px;
+  font-size: 34px;
   font-weight: 400;
   color: var(--grey);
   text-transform: uppercase;
 }
 .results-grid {
+  flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 48px;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 10px 40px;
+  position: relative;
+  z-index: 1;
 }
 .result-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 8px;
+  gap: 16px;
+  padding: 0 24px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
   border-left: 3px solid transparent;
+  min-height: 0;
 }
 .result-badge {
-  width: 32px;
-  height: 32px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
   flex-shrink: 0;
 }
 .result-team {
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--white);
   flex: 1;
@@ -153,10 +181,10 @@ body {
 }
 .result-team.away { text-align: right; }
 .result-score {
-  font-size: 18px;
+  font-size: 32px;
   font-weight: 900;
   color: var(--green);
-  min-width: 50px;
+  min-width: 72px;
   text-align: center;
   letter-spacing: 2px;
 }
@@ -221,6 +249,24 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 40px;
+  position: relative;
+  overflow: hidden;
+}
+.slide-formation::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(to right, var(--magenta), transparent 60%);
+}
+.slide-formation::after {
+  content: '';
+  position: absolute;
+  top: -100px; right: -100px;
+  width: 380px; height: 380px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,255,135,0.08);
+  pointer-events: none;
 }
 .formation-left {}
 .formation-name-big {
@@ -317,8 +363,9 @@ body {
 /* ===================== PLAYER SLIDE ===================== */
 .slide-player {
   display: grid;
-  grid-template-columns: 400px 1fr;
+  grid-template-columns: 380px 1fr;
   background: var(--purple);
+  overflow: hidden;
 }
 .player-left {
   background: linear-gradient(180deg, #2D0032 0%, #1a001f 100%);
@@ -329,6 +376,31 @@ body {
   padding: 30px;
   gap: 0;
   position: relative;
+  overflow: hidden;
+}
+/* Radial glow behind player photo */
+.player-left::before {
+  content: '';
+  position: absolute;
+  top: 35%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 340px; height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(0,255,135,0.14) 0%,
+    rgba(233,0,82,0.07) 45%,
+    transparent 70%);
+  pointer-events: none;
+}
+/* Decorative arc ring bottom-left */
+.player-left::after {
+  content: '';
+  position: absolute;
+  bottom: -90px; left: -90px;
+  width: 260px; height: 260px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,255,135,0.14);
+  pointer-events: none;
 }
 .player-photo-wrap {
   position: relative;
@@ -420,6 +492,41 @@ body {
   flex-direction: column;
   justify-content: center;
   gap: 0;
+  background: linear-gradient(135deg, #37003c 0%, #2D0032 100%);
+  position: relative;
+  overflow: hidden;
+}
+/* Magenta→green top accent stripe */
+.player-right::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(to right, var(--magenta), var(--green));
+  z-index: 2;
+}
+/* Diagonal ghost line */
+.player-right::after {
+  content: '';
+  position: absolute;
+  top: -200px; right: 130px;
+  width: 2px; height: 700px;
+  background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.05), transparent);
+  transform: rotate(-20deg);
+  pointer-events: none;
+}
+/* Large position abbreviation watermark */
+.player-pos-watermark {
+  position: absolute;
+  top: -10px; right: -20px;
+  font-size: 210px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.028);
+  letter-spacing: -8px;
+  pointer-events: none;
+  line-height: 1;
+  user-select: none;
+  z-index: 0;
 }
 .player-position-title {
   font-size: 38px;
@@ -674,6 +781,8 @@ body {
 
   <!-- Right: Stats -->
   <div class="player-right">
+    <div class="player-pos-watermark">{{ player.position_slot }}</div>
+    <div style="position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;">
     <div class="player-position-title">{{ player.position_full }}</div>
     <div class="player-full-name-right">{{ player.name }}</div>
     <div class="player-key-stat">{{ player.key_stat }}</div>
@@ -686,6 +795,7 @@ body {
       </div>
       {% endfor %}
     </div>
+    </div>{# close z-index wrapper #}
   </div>
 </div>
 {% endfor %}

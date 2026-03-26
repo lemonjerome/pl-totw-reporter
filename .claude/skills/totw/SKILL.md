@@ -122,24 +122,52 @@ Confirm the PNG was created at `output/matchweek-{N}/totw_diagram.png`."
 
 Delegate to the **visualizer** agent:
 
-"Create the Google Slides presentation for matchweek {N}. Use the Google Workspace MCP to build all slides following the sequence in visualizer.md. Export to PDF at `output/matchweek-{N}/totw-presentation.pdf` and delete from Google Drive."
+"Build the TOTW presentation for matchweek {N}:
+```
+python scripts/presentation_builder.py {N}
+```
+Confirm both `output/matchweek-{N}/presentation.pdf` and `output/matchweek-{N}/presentation.pptx` were created."
 
 ## Step 7: Email Delivery Phase
 
-Delegate to the **visualizer** agent:
+**Execute directly in the main session — do NOT delegate to a subagent.**
 
-"Send the TOTW email for matchweek {N}:
-1. `python3 scripts/compose_email.py {N}` — generate email HTML
-2. Use Gmail MCP to send: from 24hrnts@gmail.com to 20gabramos04@gmail.com
-3. Attach `output/matchweek-{N}/totw-presentation.pdf`"
+**7a.** Generate the email HTML:
+```bash
+python3 scripts/email_sender.py {N}
+```
 
-## Step 8: Confirmation
+**7b.** Read the full HTML content from `output/matchweek-{N}/email.html`.
+
+**7c.** Send using the **`send_email`** tool from the **gmail** MCP server:
+- `to`: `["24hrnts@gmail.com"]`
+- `subject`: `⚽ PL TOTW — Matchweek {N}`
+- `body`: full HTML string read in 7b
+- `attachments`: `[{"path": "/Users/gabrielramos/Desktop/PL-team-builder/output/matchweek-{N}/presentation.pdf", "filename": "PL-TOTW-Matchweek-{N}.pdf"}]`
+
+**If the gmail MCP tool is not available**, fall back to:
+```bash
+python3 scripts/send_email_gmail.py {N}
+```
+
+## Step 8: GDrive Upload Phase
+
+**Execute directly in the main session — do NOT delegate to a subagent.**
+
+```bash
+python3 scripts/gdrive_uploader.py {N}
+```
+
+This single command handles everything: folder creation, 5 file uploads, GSheet tab creation, and 11-player stats rows. Wait for it to print confirmation before proceeding.
+
+## Step 9: Confirmation
 
 ```
 ✅ Premier League TOTW — Matchweek {N} Complete!
 
 📊 Team: {Formation} — {list key players briefly}
 🖼️  Diagram: output/matchweek-{N}/totw_diagram.png
-📑 Slides: output/matchweek-{N}/totw-presentation.pdf
-📧 Email sent to 20gabramos04@gmail.com
+📑 Slides: output/matchweek-{N}/presentation.pdf
+📧 Email: ⚽ PL TOTW — Matchweek {N} → 24hrnts@gmail.com
+☁️  GDrive: My Drive/EPL TOTW Reporter/2025-26/matchweek-{NN}/
 ```

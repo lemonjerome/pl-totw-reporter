@@ -4,17 +4,18 @@ Automated EPL TOTW system. Fetches 2025-26 match data via soccerdata (FPL + Sofa
 
 ## Project Details
 
-- **From email**: 24hrnts@gmail.com
-- **To email**: 20gabramos04@gmail.com
-- **Data source**: `soccerdata` library — FPL API (fixtures) + Understat (attacking stats) + ESPN (saves/formation). No API key required.
+- **From/To email**: 24hrnts@gmail.com
+- **Data source**: `soccerdata` library — FPL API (fixtures) + SofaScore API (player stats). No API key required.
 - **API-Football**: Legacy — covers seasons 2022–2024 only. Use `scripts/api_football.py` for historical data. Script: `scripts/soccerdata_client.py` for 2025-26.
+
 ## Tech Stack
 
 - Python 3.11+ — all data processing, API calls, rendering
 - Playwright — HTML-to-PNG screenshots (diagram + presentation)
 - Jinja2 — HTML templating for diagram and email
 - Pydantic — data models
-- Google Workspace MCP — Google Slides + Gmail
+- **Gmail MCP** (`@gongrzhe/server-gmail-autoauth-mcp`) — `send_email` tool; token in `~/.gmail-mcp/`
+- **GDrive MCP** (`@isaacphi/mcp-gdrive`) — read-only Drive search/read + single-cell Sheets; uploads via `scripts/gdrive_uploader.py`
 - Playwright MCP — web browsing by agents
 
 ## Key Conventions
