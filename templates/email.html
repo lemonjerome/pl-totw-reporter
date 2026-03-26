@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PL TOTW &#8212; Matchweek {{ matchweek }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0eff4;font-family:Arial,'Helvetica Neue',sans-serif;">
+
+<!-- Outer wrapper -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0eff4;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+
+      <!-- Email card — max 600px -->
+      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#37003c;border-radius:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+
+        <!-- ====== HEADER ====== -->
+        <tr>
+          <td style="background-color:#37003c;padding:40px 44px 32px 44px;text-align:center;border-bottom:4px solid #00ff87;">
+            <p style="margin:0 0 8px 0;font-size:11px;font-weight:700;color:#00ff87;letter-spacing:6px;text-transform:uppercase;">Premier League &nbsp;&#183;&nbsp; {{ season }} Season</p>
+            <h1 style="margin:0;font-size:36px;font-weight:900;color:#ffffff;letter-spacing:3px;text-transform:uppercase;line-height:1.1;">Team of the Week</h1>
+            <div style="width:120px;height:3px;background-color:#00ff87;margin:16px auto 12px auto;border-radius:2px;"></div>
+            <p style="margin:0;font-size:22px;font-weight:700;color:#00ff87;letter-spacing:4px;text-transform:uppercase;">Matchweek {{ matchweek }}</p>
+          </td>
+        </tr>
+
+        <!-- ====== INTRO TEXT ====== -->
+        <tr>
+          <td style="background-color:#37003c;padding:28px 44px 16px 44px;">
+            <p style="margin:0;font-size:15px;color:#ffffff;line-height:1.75;">
+              What a matchweek! Incredible performances across the league — and the numbers back it up.
+              Here is your Premier League <strong style="color:#00ff87;">Team of the Week</strong> for Matchweek&nbsp;{{ matchweek }},
+              built around a <strong style="color:#00ff87;">{{ formation }}</strong> formation.
+            </p>
+          </td>
+        </tr>
+
+        {% if diagram_data_uri %}
+        <!-- ====== TOTW DIAGRAM ====== -->
+        <tr>
+          <td style="background-color:#1a7f37;padding:0;text-align:center;">
+            <img src="{{ diagram_data_uri }}"
+                 alt="Premier League Team of the Week — Matchweek {{ matchweek }}"
+                 width="520"
+                 style="max-width:100%;width:520px;display:block;margin:0 auto;" />
+          </td>
+        </tr>
+        {% endif %}
+
+        <!-- ====== FORMATION ====== -->
+        <tr>
+          <td style="background-color:#37003c;padding:28px 44px 16px 44px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-left:4px solid #e90052;padding-left:16px;">
+                  <p style="margin:0 0 4px 0;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:4px;text-transform:uppercase;">Selected Formation</p>
+                  <p style="margin:0 0 8px 0;font-size:30px;font-weight:900;color:#ffffff;letter-spacing:1px;">{{ formation }}</p>
+                  {% if formation_rationale %}
+                  <p style="margin:0;font-size:13px;color:#b3b3c6;line-height:1.65;">{{ formation_rationale[:240] }}{% if formation_rationale|length > 240 %}&hellip;{% endif %}</p>
+                  {% endif %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ====== TOTW XI TABLE ====== -->
+        <tr>
+          <td style="background-color:#37003c;padding:28px 44px 8px 44px;">
+            <p style="margin:0 0 14px 0;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:4px;text-transform:uppercase;">Team of the Week XI</p>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <!-- Header -->
+              <tr style="background-color:#2D0032;">
+                <td style="padding:9px 10px;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:2px;text-transform:uppercase;width:48px;">Pos</td>
+                <td style="padding:9px 10px;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:2px;text-transform:uppercase;">Player</td>
+                <td style="padding:9px 10px;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:2px;text-transform:uppercase;width:130px;">Club</td>
+                <td style="padding:9px 10px;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:2px;text-transform:uppercase;">Key Stat</td>
+              </tr>
+              {% for p in players %}
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);{% if loop.index is odd %}background-color:rgba(255,255,255,0.04);{% endif %}">
+                <td style="padding:10px 10px;">
+                  <span style="display:inline-block;background-color:#e90052;color:#ffffff;font-size:9px;font-weight:700;padding:3px 7px;border-radius:4px;letter-spacing:1px;text-transform:uppercase;">{{ p.position_slot }}</span>
+                </td>
+                <td style="padding:10px 10px;">
+                  <span style="font-size:13px;font-weight:700;color:#ffffff;">{{ p.name }}</span>
+                </td>
+                <td style="padding:10px 10px;">
+                  <span style="font-size:12px;color:#b3b3c6;">{{ p.team_name }}</span>
+                </td>
+                <td style="padding:10px 10px;">
+                  <span style="font-size:12px;color:#00ff87;font-weight:600;">{{ p.key_stat }}</span>
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+          </td>
+        </tr>
+
+        <!-- ====== MATCH RESULTS ====== -->
+        <tr>
+          <td style="background-color:#37003c;padding:28px 44px 8px 44px;">
+            <p style="margin:0 0 14px 0;font-size:10px;font-weight:700;color:#b3b3c6;letter-spacing:4px;text-transform:uppercase;">Matchweek {{ matchweek }} Results</p>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              {% for f in fixtures %}
+              <tr>
+                <td style="padding:6px 8px;border-radius:5px;{% if loop.index is odd %}background-color:rgba(255,255,255,0.05);{% endif %}">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <!-- Home team -->
+                      <td width="43%" style="text-align:right;padding-right:8px;">
+                        {% if f.home_logo %}
+                        <img src="{{ f.home_logo }}" width="18" height="18"
+                             style="vertical-align:middle;margin-right:6px;display:inline;" alt="" />
+                        {% endif %}
+                        <span style="font-size:13px;color:#ffffff;font-weight:{% if f.home_score is number and f.away_score is number and f.home_score > f.away_score %}700{% else %}400{% endif %};">{{ f.home_name }}</span>
+                      </td>
+                      <!-- Score -->
+                      <td width="14%" style="text-align:center;">
+                        <span style="font-size:14px;font-weight:900;color:#00ff87;letter-spacing:2px;">{{ f.home_score }}&ndash;{{ f.away_score }}</span>
+                      </td>
+                      <!-- Away team -->
+                      <td width="43%" style="text-align:left;padding-left:8px;">
+                        <span style="font-size:13px;color:#ffffff;font-weight:{% if f.home_score is number and f.away_score is number and f.away_score > f.home_score %}700{% else %}400{% endif %};">{{ f.away_name }}</span>
+                        {% if f.away_logo %}
+                        <img src="{{ f.away_logo }}" width="18" height="18"
+                             style="vertical-align:middle;margin-left:6px;display:inline;" alt="" />
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+          </td>
+        </tr>
+
+        <!-- ====== CTA ====== -->
+        <tr>
+          <td style="background-color:#37003c;padding:32px 44px 24px 44px;text-align:center;">
+            <p style="margin:0 0 18px 0;font-size:13px;color:#b3b3c6;line-height:1.6;">
+              Full player stats, match reports, and the complete formation breakdown<br>are in the attached PDF report.
+            </p>
+            <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+              <tr>
+                <td style="background-color:#e90052;border-radius:6px;padding:14px 36px;">
+                  <span style="font-size:13px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:2px;">View Full Report &#8594;</span>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:16px 0 0 0;font-size:12px;color:#b3b3c6;">
+              Attachment: <strong style="color:#ffffff;">PL-TOTW-Matchweek-{{ matchweek }}.pdf</strong>
+            </p>
+          </td>
+        </tr>
+
+        <!-- ====== FOOTER ====== -->
+        <tr>
+          <td style="background-color:#2D0032;padding:18px 44px;text-align:center;border-top:1px solid rgba(255,255,255,0.1);">
+            <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;">
+              24hrnts@gmail.com &nbsp;&#183;&nbsp; EPL TOTW Builder &nbsp;&#183;&nbsp; {{ season }} Season
+            </p>
+          </td>
+        </tr>
+
+      </table><!-- /email card -->
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

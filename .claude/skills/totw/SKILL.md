@@ -79,13 +79,6 @@ Agent 3 prompt: `Matchweek: {N}. Your fixture IDs: {id8} {id9} {id10} — run fe
 
 Wait for all 3 to complete.
 
-**3d. Scrape match reports and commentaries:**
-```bash
-python3 scripts/pl_scraper.py match-reports {N}
-python3 scripts/pl_scraper.py commentaries {N}
-```
-Failures are non-blocking.
-
 ## Step 4: Analysis Phase — Single Researcher Agent
 
 Delegate to the **researcher** agent:

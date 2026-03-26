@@ -70,14 +70,11 @@ For each selected player, write a synthesis report including:
 
 1. **Stats summary**: List all primary and relevant secondary stats from the matchweek.
 2. **Match context**: Which game did they play? Score and result.
-3. **Key moments**: Specific goals, assists, saves, crucial defensive actions — quote from match commentary if available.
+3. **Key moments**: Specific goals, assists, saves, crucial defensive actions derived from stats.
 4. **Why selected**: Brief explanation of why this player stood above the rest at their position.
 5. **Notable numbers**: Bold or highlight the key stat (e.g., "2 goals and 1 assist in a 4-0 victory").
 
-Source priority for reports:
-1. API stats (always include)
-2. PL website match reports (scrape from premierleague.com)
-3. PL website match commentaries (scrape from match > Commentary tab)
+Source for reports: SofaScore player stats (via soccerdata_client.py).
 
 ---
 

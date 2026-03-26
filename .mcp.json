@@ -2,8 +2,8 @@
   "mcpServers": {
     "google-workspace": {
       "type": "stdio",
-      "command": "uvx",
-      "args": ["google-workspace-mcp"],
+      "command": "/Users/gabrielramos/.local/bin/uvx",
+      "args": ["--from", "google-workspace-mcp", "google-workspace-worker"],
       "env": {
         "GOOGLE_OAUTH_CLIENT_ID": "${GOOGLE_OAUTH_CLIENT_ID}",
         "GOOGLE_OAUTH_CLIENT_SECRET": "${GOOGLE_OAUTH_CLIENT_SECRET}"

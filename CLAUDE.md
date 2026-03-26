@@ -1,6 +1,6 @@
 # English Premier League — Team of the Week Builder
 
-Automated EPL TOTW system. Fetches 2025-26 match data via soccerdata (FPL + Understat + ESPN), scrapes the PL website for match reports and commentaries, selects the best formation and players, generates a visual team diagram, creates a Google Slides presentation, and delivers results via Gmail.
+Automated EPL TOTW system. Fetches 2025-26 match data via soccerdata (FPL + SofaScore), selects the best formation and players, generates a visual team diagram, creates a presentation, and delivers results via Gmail with GDrive storage.
 
 ## Project Details
 
@@ -8,12 +8,10 @@ Automated EPL TOTW system. Fetches 2025-26 match data via soccerdata (FPL + Unde
 - **To email**: 20gabramos04@gmail.com
 - **Data source**: `soccerdata` library — FPL API (fixtures) + Understat (attacking stats) + ESPN (saves/formation). No API key required.
 - **API-Football**: Legacy — covers seasons 2022–2024 only. Use `scripts/api_football.py` for historical data. Script: `scripts/soccerdata_client.py` for 2025-26.
-- **PL website**: https://www.premierleague.com
-
 ## Tech Stack
 
-- Python 3.11+ — all data processing, API calls, scraping, rendering
-- Playwright — PL website scraping (JS-heavy SPA) + HTML-to-PNG screenshots
+- Python 3.11+ — all data processing, API calls, rendering
+- Playwright — HTML-to-PNG screenshots (diagram + presentation)
 - Jinja2 — HTML templating for diagram and email
 - Pydantic — data models
 - Google Workspace MCP — Google Slides + Gmail
@@ -45,9 +43,6 @@ python scripts/player_evaluator.py 30
 
 # Generate diagram
 python scripts/diagram_renderer.py 30
-
-# Scrape PL website
-python scripts/pl_scraper.py match-reports 30
 
 # Run tests
 pytest tests/ -v

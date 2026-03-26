@@ -1,6 +1,6 @@
 ---
 name: research
-description: Fetch all Premier League matchweek data from soccerdata (FPL + Understat + ESPN) and scrape the PL website for match reports and commentaries. Run before analyze. Usage: /research [matchweek_number]
+description: Fetch all Premier League matchweek data from soccerdata (FPL + SofaScore). Run before analyze. Usage: /research [matchweek_number]
 ---
 
 # Research — Parallel Data Collection for Matchweek
@@ -11,8 +11,35 @@ Collect all data for matchweek $ARGUMENTS from soccerdata sources using 3 parall
 
 Check that scripts exist:
 ```bash
-ls scripts/soccerdata_client.py scripts/pl_scraper.py
+ls scripts/soccerdata_client.py
 ```
+
+## Step 0: GDrive Cache Check
+
+Before fetching any data, check Google Drive for cached analysis outputs.
+
+Use Drive MCP tools to navigate the folder tree:
+1. List files in My Drive root → find `EPL TOTW Reporter`
+2. Inside → find `2025-26`
+3. Inside → find `matchweek-{NN}` (zero-padded: `f"matchweek-{N:02d}"`)
+4. List files in that matchweek folder
+
+Check whether **both** `players.json` **and** `formation.json` are present.
+
+**Cache HIT** (both files exist):
+- Download `players.json` → save to `output/matchweek-$ARGUMENTS/analysis/players.json`
+- Download `formation.json` → save to `output/matchweek-$ARGUMENTS/analysis/formation.json`
+- Create the `output/matchweek-$ARGUMENTS/analysis/` directory first if it doesn't exist
+- Print: `GDrive cache hit ✅ Matchweek $ARGUMENTS — skipping fetch pipeline`
+- Jump directly to Step 7 (verify).
+
+**Cache MISS** (either file absent):
+- Print: `GDrive cache miss — running full fetch pipeline.`
+- Continue with Step 1 below.
+
+**Drive unavailable** (MCP not connected / auth error / folder not found):
+- Print: `GDrive unavailable — running full fetch pipeline.`
+- Continue with Step 1 below. Never block the pipeline.
 
 ## Step 1: Check Fixture Status
 
@@ -84,23 +111,7 @@ Report when done.
 
 Wait for all 3 agents to complete before proceeding.
 
-## Step 5: Scrape Match Reports (after parallel fetch)
-
-```bash
-python3 scripts/pl_scraper.py match-reports $ARGUMENTS
-```
-
-Save to `data/2025-26/matchweek-{N}/reports/`. Failures are non-blocking.
-
-## Step 6: Scrape Commentaries
-
-```bash
-python3 scripts/pl_scraper.py commentaries $ARGUMENTS
-```
-
-Save to `data/2025-26/matchweek-{N}/commentaries/`. Failures are non-blocking.
-
-## Step 7: Verify Data
+## Step 5: Verify Data
 
 ```bash
 ls data/2025-26/matchweek-$ARGUMENTS/
@@ -110,8 +121,6 @@ Expected files:
 - `fixtures.json` ✅
 - `players_{id}.json` × N fixtures ✅
 - `lineups_{id}.json` × N fixtures ✅
-- `reports/*.txt` (may be partial) ⚠️
-- `commentaries/*.txt` (may be partial) ⚠️
 
 ## Output Summary
 
@@ -121,7 +130,5 @@ Research complete for Matchweek {N}:
 ✅ Fixtures: {N}/10 fetched
 ✅ Player stats: {N}/10 fetched ({total_players} players) — 3 parallel agents
 ✅ Lineups: {N}/10 fetched — 3 parallel agents
-✅ Match reports: {X}/10 scraped
-✅ Commentaries: {Y}/10 scraped
-Data sources: FPL API + Understat + ESPN (via soccerdata)
+Data sources: FPL API + SofaScore (via soccerdata)
 ```
