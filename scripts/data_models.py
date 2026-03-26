@@ -252,6 +252,7 @@ class Player(BaseModel):
     nationality: str
     country_code: str    # ISO code for flag (e.g. "gb-eng", "fr", "br")
     position_code: str   # G, D, M, F (from API)
+    specific_position: Optional[str] = None  # e.g. "GK", "CB", "ST", "RM" — inferred from formation
     grid_position: Optional[str] = None  # e.g. "1:1" from lineup data
     stats: PlayerStats = Field(default_factory=PlayerStats)
     fixture_id: int = 0

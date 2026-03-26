@@ -226,12 +226,50 @@ _SS_POS_TO_NAME: dict[str, str] = {
     "F": "Forward",
 }
 
+# Formation string → ordered list of 11 specific positions (GK first, then defense to attack)
+# Used to infer specific_position for each starter by their sequential index in the lineup
+FORMATION_SLOT_POSITIONS: dict[str, list[str]] = {
+    "4-3-3":       ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CM", "RW", "ST", "LW"],
+    "4-2-3-1":     ["GK", "RB", "CB", "CB", "LB", "CDM", "CDM", "RM", "CAM", "LM", "ST"],
+    "4-4-2":       ["GK", "RB", "CB", "CB", "LB", "RM", "CM", "CM", "LM", "ST", "ST"],
+    "4-4-1-1":     ["GK", "RB", "CB", "CB", "LB", "RM", "CM", "CM", "LM", "CAM", "ST"],
+    "4-1-4-1":     ["GK", "RB", "CB", "CB", "LB", "CDM", "RM", "CM", "CM", "LM", "ST"],
+    "4-1-2-1-2":   ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CM", "CAM", "ST", "ST"],
+    "4-2-2-2":     ["GK", "RB", "CB", "CB", "LB", "CDM", "CDM", "CAM", "CAM", "ST", "ST"],
+    "4-5-1":       ["GK", "RB", "CB", "CB", "LB", "RM", "CM", "CM", "CM", "LM", "ST"],
+    "4-3-2-1":     ["GK", "RB", "CB", "CB", "LB", "CM", "CM", "CM", "CAM", "CAM", "ST"],
+    "4-1-3-2":     ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CM", "CM", "ST", "ST"],
+    "4-2-4":       ["GK", "RB", "CB", "CB", "LB", "CDM", "CDM", "LW", "ST", "ST", "RW"],
+    "3-4-3":       ["GK", "CB", "CB", "CB", "LWB", "CM", "CM", "RWB", "LW", "ST", "RW"],
+    "3-4-2-1":     ["GK", "CB", "CB", "CB", "LWB", "CM", "CM", "RWB", "CAM", "CAM", "ST"],
+    "3-4-1-2":     ["GK", "CB", "CB", "CB", "LWB", "CM", "CM", "RWB", "CAM", "ST", "ST"],
+    "3-5-2":       ["GK", "CB", "CB", "CB", "LWB", "CM", "CM", "CM", "RWB", "ST", "ST"],
+    "3-5-1-1":     ["GK", "CB", "CB", "CB", "LWB", "CM", "CM", "CM", "RWB", "CAM", "ST"],
+    "3-2-4-1":     ["GK", "CB", "CB", "CB", "CDM", "CDM", "RM", "CM", "CM", "LM", "ST"],
+    "3-1-4-2":     ["GK", "CB", "CB", "CB", "CDM", "RM", "CM", "CM", "LM", "ST", "ST"],
+    "3-1-3-3":     ["GK", "CB", "CB", "CB", "CDM", "CM", "CM", "CM", "LW", "ST", "RW"],
+    "5-3-2":       ["GK", "LWB", "CB", "CB", "CB", "RWB", "CM", "CM", "CM", "ST", "ST"],
+    "5-4-1":       ["GK", "LWB", "CB", "CB", "CB", "RWB", "RM", "CM", "CM", "LM", "ST"],
+    "5-2-2-1":     ["GK", "LWB", "CB", "CB", "CB", "RWB", "CDM", "CDM", "CAM", "CAM", "ST"],
+    "4-6-0":       ["GK", "RB", "CB", "CB", "LB", "CDM", "CDM", "CM", "CM", "CAM", "CAM"],
+    "4-4-2 Diamond": ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CM", "CAM", "ST", "ST"],
+}
+
+
+def _infer_specific_position(formation: str, starter_index: int) -> Optional[str]:
+    """Return the specific position (e.g. 'CB', 'ST') for the nth starter in a given formation."""
+    slots = FORMATION_SLOT_POSITIONS.get(formation)
+    if slots and 0 <= starter_index < len(slots):
+        return slots[starter_index]
+    return None
+
 
 def _parse_sofascore_team(team_data: dict, goals_conceded: Optional[int]) -> tuple[str, list[dict]]:
     """Parse one team's lineups response into (formation_string, [player_stat_dicts])."""
     formation = team_data.get("formation", "")
     players_raw = team_data.get("players", [])
     result = []
+    starter_index = 0  # sequential 0-based index among starters (GK=0 ... ST=10)
     for entry in players_raw:
         p = entry.get("player", {})
         stats = entry.get("statistics", {})
@@ -241,6 +279,12 @@ def _parse_sofascore_team(team_data: dict, goals_conceded: Optional[int]) -> tup
         pos_name = _SS_POS_TO_NAME.get(str(pos_code_raw), "Midfielder")
 
         is_starter = not entry.get("substitute", True)
+
+        # Infer specific position from formation + sequential starter index
+        specific_pos: Optional[str] = None
+        if is_starter:
+            specific_pos = _infer_specific_position(formation, starter_index)
+            starter_index += 1
 
         # Use minutesPlayed from statistics (most reliable)
         minutes = stats.get("minutesPlayed") or 0
@@ -262,6 +306,7 @@ def _parse_sofascore_team(team_data: dict, goals_conceded: Optional[int]) -> tup
             "player_name":       p.get("name", ""),
             "position_name":     pos_name,
             "position_code":     str(pos_code_raw),
+            "specific_position": specific_pos,
             "country_code":      country_code,
             "minutes":           minutes,
             "is_starter":        is_starter,
@@ -725,6 +770,7 @@ def _build_sofascore_player(
         nationality="",
         country_code=country_code,
         position_code=pos_code,
+        specific_position=ss.get("specific_position") or None,
         grid_position=ss.get("position_code") or None,
         stats=stats,
         fixture_id=fixture_id,
@@ -945,6 +991,7 @@ def _players_to_api_football_format(players: list[Player], fixture: Fixture) -> 
                     "photo": p.photo,
                     "nationality": p.nationality,
                     "country_code": p.country_code,
+                    "specific_position": p.specific_position,
                 },
                 "statistics": [{
                     "games": {
@@ -1081,6 +1128,15 @@ def cmd_fetch_round(matchweek: int):
     for f in fixtures:
         status = "✅" if f.is_complete else "⏳"
         print(f"  {status} [{f.fixture_id}] {f.home_team.name} {f.score_str} {f.away_team.name}")
+
+    # Pre-fetch next matchweek fixtures for the presentation's "Coming Up" slide
+    try:
+        next_mw = matchweek + 1
+        next_fixtures = fetch_fixtures(next_mw)
+        if next_fixtures:
+            print(f"\nMatchweek {next_mw} (next): {len(next_fixtures)} fixtures pre-fetched.")
+    except Exception:
+        pass  # Next matchweek may not exist yet — silently ignore
 
 
 def cmd_fetch_players(matchweek: int):

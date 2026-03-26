@@ -140,9 +140,7 @@ def score_st(p: Player) -> tuple:
 # Position slot → score function + eligible API position codes
 # ---------------------------------------------------------------------------
 
-# Maps formation position slot → (score_fn, eligible_api_positions, eligible_slots)
-# eligible_api_positions: what API `position` codes qualify (G/D/M/F)
-# We also check flexible position mapping by trying adjacent slots
+# Maps formation position slot → (score_fn, eligible_api_positions)
 POSITION_CONFIG: dict[str, dict] = {
     "GK":  {"score_fn": score_gk,     "api_pos": {"G"}},
     "RB":  {"score_fn": score_fb,     "api_pos": {"D"}},
@@ -159,6 +157,26 @@ POSITION_CONFIG: dict[str, dict] = {
     "LW":  {"score_fn": score_winger, "api_pos": {"M", "F"}},
     "ST":  {"score_fn": score_st,     "api_pos": {"F", "M"}},
     "CF":  {"score_fn": score_st,     "api_pos": {"F", "M"}},
+}
+
+# For each TOTW slot, which specific_positions are compatible?
+# Primary = exact match; Flexible = fallback if no primary candidates
+SLOT_COMPATIBILITY: dict[str, dict[str, list[str]]] = {
+    "GK":  {"primary": ["GK"],               "flexible": []},
+    "RB":  {"primary": ["RB", "RWB"],        "flexible": ["CB", "LB"]},
+    "CB":  {"primary": ["CB"],               "flexible": ["RB", "LB", "CDM"]},
+    "LB":  {"primary": ["LB", "LWB"],        "flexible": ["CB", "RB"]},
+    "RWB": {"primary": ["RWB", "RB", "RM"],  "flexible": ["CB"]},
+    "LWB": {"primary": ["LWB", "LB", "LM"],  "flexible": ["CB"]},
+    "CDM": {"primary": ["CDM"],              "flexible": ["CM", "CB"]},
+    "CM":  {"primary": ["CM", "CDM", "CAM"], "flexible": ["RM", "LM"]},
+    "CAM": {"primary": ["CAM", "CM"],        "flexible": ["RM", "LM", "ST"]},
+    "RM":  {"primary": ["RM", "RW", "RWB"],  "flexible": ["CM", "LM"]},
+    "LM":  {"primary": ["LM", "LW", "LWB"],  "flexible": ["CM", "RM"]},
+    "RW":  {"primary": ["RW", "RM"],         "flexible": ["LW", "CAM"]},
+    "LW":  {"primary": ["LW", "LM"],         "flexible": ["RW", "CAM"]},
+    "ST":  {"primary": ["ST", "CF"],         "flexible": ["CAM", "RW", "LW"]},
+    "CF":  {"primary": ["CF", "ST"],         "flexible": ["CAM"]},
 }
 
 # Flexible fallback — if not enough candidates for a slot, also consider these api_pos
@@ -273,6 +291,7 @@ def _parse_player_from_cache(
         nationality=p.get("nationality", ""),
         country_code=p.get("country_code", "xx") or "xx",
         position_code=position,
+        specific_position=p.get("specific_position") or None,
         stats=stats,
         fixture_id=fixture_id,
         fixture_result=fixture_result,
@@ -352,21 +371,41 @@ def select_players_for_formation(
         score_fn = config["score_fn"]
         api_pos = config["api_pos"]
         flex_api_pos = FLEXIBLE_API_POS.get(position_slot, set())
+        compat = SLOT_COMPATIBILITY.get(position_slot, {"primary": [], "flexible": []})
+        primary_specific = set(compat["primary"])
+        flexible_specific = set(compat["flexible"])
 
-        # Find eligible candidates not already selected
+        def _eligible_base(p: Player) -> bool:
+            return p.player_id not in used_player_ids and p.is_eligible
+
+        # Tier 1: exact specific_position match (most strict)
         candidates = [
             p for p in all_players
-            if p.player_id not in used_player_ids
-            and p.is_eligible
-            and p.position_code in api_pos
+            if _eligible_base(p)
+            and p.specific_position in primary_specific
         ]
 
-        # Fallback: include flexible positions if needed
+        # Tier 2: flexible specific_position match
         if not candidates:
             candidates = [
                 p for p in all_players
-                if p.player_id not in used_player_ids
-                and p.is_eligible
+                if _eligible_base(p)
+                and p.specific_position in flexible_specific
+            ]
+
+        # Tier 3: fall back to broad API position code (original behavior)
+        if not candidates:
+            candidates = [
+                p for p in all_players
+                if _eligible_base(p)
+                and p.position_code in api_pos
+            ]
+
+        # Tier 4: include flexible api_pos codes
+        if not candidates:
+            candidates = [
+                p for p in all_players
+                if _eligible_base(p)
                 and p.position_code in (api_pos | flex_api_pos)
             ]
 

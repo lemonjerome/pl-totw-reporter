@@ -1,125 +1,81 @@
 ---
 name: presentation
-description: Create a PL-styled Google Slides presentation for the TOTW and export to PDF. Includes results, team diagram, formation report, player slides, and next fixtures. Run after /visualize. Usage: /presentation [matchweek_number]
+description: Create a PL-styled presentation for the TOTW and export to PDF using python-pptx + Playwright. Includes results, team diagram, formation report, player slides, and next fixtures. Run after /visualize. Usage: /presentation [matchweek_number]
 ---
 
-# Presentation — Google Slides TOTW Report
+# Presentation — TOTW Report
 
-Create the TOTW presentation for matchweek $ARGUMENTS using Google Workspace MCP.
+Create the TOTW presentation for matchweek $ARGUMENTS using `scripts/presentation_builder.py`.
 
 ## Prerequisites
 
-Verify required files exist:
+Verify required files exist before running:
 ```bash
-ls output/matchweek-$ARGUMENTS/totw-diagram.png
+ls output/matchweek-$ARGUMENTS/totw_diagram.png
 ls output/matchweek-$ARGUMENTS/analysis/players.json
-ls output/matchweek-$ARGUMENTS/analysis/formation_report.md
+ls output/matchweek-$ARGUMENTS/analysis/formation.json
 ```
 
-Verify Google Workspace MCP is connected:
-- Check `/mcp` — `google-workspace` server should be listed and connected.
+If any are missing, run the earlier pipeline stages first (`/research`, `/analyze`, `/visualize`).
 
-## Step 1: Load All Content
+## Step 1: Run the Presentation Builder
 
-Read these files to prepare slide content:
-- `output/matchweek-$ARGUMENTS/analysis/formation.json` — formation name and rationale
-- `output/matchweek-$ARGUMENTS/analysis/players.json` — 11 players with stats
-- `output/matchweek-$ARGUMENTS/analysis/formation_report.md` — formation explanation text
-- `output/matchweek-$ARGUMENTS/analysis/player_reports/*.md` — per-player reports
-- `data/2025-26/matchweek-$ARGUMENTS/fixtures.json` — all match results with scores
-- `output/matchweek-$ARGUMENTS/totw-diagram.png` — team diagram image
-
-Also fetch next matchweek fixtures:
 ```bash
-python scripts/api_football.py fetch-round {N+1}
+python scripts/presentation_builder.py $ARGUMENTS
 ```
 
-## Step 2: Create Presentation
+This creates two files:
+- `output/matchweek-{N}/presentation.pdf` — high-quality PDF (Playwright HTML rendering)
+- `output/matchweek-{N}/presentation.pptx` — editable PowerPoint file (python-pptx)
 
-Use Google Workspace MCP to create a new presentation titled: `PL TOTW Matchweek {N}`.
+## Slide Structure
 
-**Slide sequence** (follow PL design system from pl-design.md):
+The presentation always follows this 17-slide structure:
 
-### Slide 1 — Title
-- Background: `#37003c` (deep purple) gradient
-- Title: "Premier League" (white, 48px, bold)
-- Subtitle: "Team of the Week — Matchweek {N}" (green `#00ff87`, 28px)
-- Season label: "2025/26" (white, 16px)
+| # | Slide | Content |
+|---|-------|---------|
+| 1 | Title | "Team of the Week · Matchweek N" on PL purple background |
+| 2 | Results | All 10 match results with team badges and scores |
+| 3 | Section | "FORMATION" section divider (magenta gradient) |
+| 4 | Formation | Formation name, usage stats, winning teams, rationale |
+| 5 | Section | "PLAYERS" section divider (magenta gradient) |
+| 6–16 | Player | 1 per player (GK → defenders → midfielders → attackers) |
+| 17 | Diagram | TOTW pitch diagram (left) + Next matchweek fixtures (right) |
 
-### Slide 2 — [Section] Results
-- Background: `#e90052` (magenta)
-- Title: "Matchweek {N} Results" (white, centered, 36px bold)
+## Player Slide Layout
 
-### Slide 3 — Fixtures & Results
-- Background: `#37003c`
-- Title: "Matchweek {N} Results" (white, 24px)
-- List all 10 matches:
-  - Row: [Home badge 32px] [Home team] [Score in green] [Away team] [Away badge 32px]
-  - Home team on LEFT, Away team on RIGHT
-  - Score in `#00ff87`, bold
-  - Alternating row backgrounds: `rgba(255,255,255,0.05)`
+Each player slide has:
+- **Left**: Circular photo with green border, team badge overlay, nationality flag, name, position label
+- **Right**: Position title (magenta), player name, key stat (green), stats grid with 6 metrics
 
-### Slide 4 — [Section] Team of the Week
-- Background: `#37003c`
-- Title: "Team of the Week" (white, centered, 36px bold)
-- Subtitle: "Matchweek {N} — {Formation}" (green `#00ff87`, 20px)
+Position-specific stats displayed:
+- GK: Saves, Goals Conceded, Clean Sheet, Minutes, Rating
+- CB: Tackles Won, Interceptions, Clearances, Aerial Duels Won, Blocks, Rating
+- RB/LB: Defensive Actions, Key Passes, Assists, Tackles, Interceptions, Rating
+- CDM: Tackles Won, Interceptions, Clearances, Duels Won, Pass Accuracy, Rating
+- CM/CAM: Key Passes, Goals, Assists, Pass Accuracy, Tackles, Rating
+- RM/LM/RW/LW: Goals, Assists, Key Passes, Dribbles, Shots on Target, Rating
+- ST/CF: Goals, Shots on Target, Assists, Shot Conversion, Total Shots, Rating
 
-### Slide 5 — TOTW Diagram
-- Background: Green pitch (`#1a7f37`)
-- Embed `output/matchweek-{N}/totw-diagram.png` filling the slide
-- Small title overlay at top: "Team of the Week — Matchweek {N}" (white, semi-transparent background)
+## Next Matchweek Fixtures
 
-### Slide 6 — Formation Report
-- Background: `#37003c`
-- Title: "Formation: {N-N-N}" (white, 28px)
-- Body: Text from `formation_report.md` (white, 14px, line-height 1.6)
-- Highlight key stat: e.g., "{X} teams won using this formation"
-
-### Slide 7 — [Section] Players
-- Background: `#e90052`
-- Title: "The Players" (white, centered, 36px bold)
-
-### Slides 8-18 — Individual Player Slides (1 per player)
-
-For each of the 11 players:
-- Background: `#37003c`
-- **Left half**: Player image (`https://media.api-sports.io/football/players/{player_id}.png`)
-  - If image unavailable: show team badge instead (full left half)
-- **Right half**:
-  - Position label (small, grey, uppercase, e.g., "GOALKEEPER")
-  - Player name (white, 32px, bold)
-  - Team badge (32px) + Club name (white, 16px)
-  - Country flag (24px) + Nationality (white, 14px)
-  - Stats block (top 3-4 stats):
-    - Label (grey, 12px uppercase) | Value (`#00ff87`, 20px bold)
-  - Selection reason (white, 12px, italic, 2-3 sentences max)
-
-### Slide 19 — [Section] Next Week
-- Background: `#37003c`
-- Title: "Coming Up Next" (white, 36px bold)
-
-### Slide 20 — Next Matchweek Fixtures
-- Background: `#37003c`
-- Title: "Matchweek {N+1} Fixtures" (green `#00ff87`, 24px)
-- List all scheduled fixtures:
-  - [Home team] vs [Away team] — [Date], [Time]
-  - If season is over: "End of Season — Thank you for following the PL TOTW!"
-
-## Step 3: Export to PDF
-
-Use Google Workspace MCP to export the presentation to PDF format.
-Download to: `output/matchweek-{N}/totw-presentation.pdf`
-
-## Step 4: Delete from Drive
-
-After confirming the PDF download is complete, delete the presentation from Google Drive.
-This keeps Drive clean — only the local PDF copy is kept.
+The last slide shows next matchweek fixtures from `data/2025-26/matchweek-{N+1}/fixtures.json`.
+- If that file doesn't exist, the slide shows "Next matchweek fixtures not yet available."
+- Dates are displayed without scores, even if the matchweek has already been played.
 
 ## Output Confirmation
 
 ```
-Presentation complete for Matchweek {N}:
-✅ Slides created: {total_slides} slides
-✅ PDF exported: output/matchweek-{N}/totw-presentation.pdf ({filesize}MB)
-✅ Presentation deleted from Google Drive
+Building presentation for matchweek {N}...
+  Formation:  4-2-3-1
+  Players:    11
+  Fixtures:   10
+
+→ Building PDF (HTML + Playwright)...
+  PDF saved:  output/matchweek-{N}/presentation.pdf (3.7 MB)
+
+→ Building PPTX (python-pptx)...
+  PPTX saved: output/matchweek-{N}/presentation.pptx (2.0 MB)
+
+Done.
 ```
