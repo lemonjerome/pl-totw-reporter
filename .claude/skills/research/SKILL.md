@@ -1,11 +1,13 @@
 ---
 name: research
-description: Fetch all Premier League matchweek data from soccerdata (FPL + SofaScore). Run before analyze. Usage: /research [matchweek_number]
+description: Fetch all Premier League matchweek data from soccerdata (FPL + SofaScore). Run before analyze. Usage: /research [matchweek_number] [local]
 ---
 
 # Research — Parallel Data Collection for Matchweek
 
 Collect all data for matchweek $ARGUMENTS from soccerdata sources using 3 parallel fetcher agents.
+
+**Local flag**: if the word `local` appears in `$ARGUMENTS`, set `LOCAL_MODE=true` and skip Step 0 entirely.
 
 ## Prerequisites
 
@@ -15,6 +17,8 @@ ls scripts/soccerdata_client.py
 ```
 
 ## Step 0: GDrive Cache Check
+
+> **Skip this step entirely if `LOCAL_MODE=true`.** Jump straight to Step 1.
 
 Before fetching any data, check Google Drive for cached analysis outputs.
 

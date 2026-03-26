@@ -1,22 +1,25 @@
 ---
 name: totw
-description: Build the Premier League Team of the Week. Orchestrates the full pipeline: data collection, formation/player analysis, team diagram, Google Slides presentation, and Gmail delivery. Invoke with a matchweek number or leave blank for the current matchweek.
+description: Build the Premier League Team of the Week. Orchestrates the full pipeline: data collection, formation/player analysis, team diagram, Google Slides presentation, and Gmail delivery. Invoke with a matchweek number or leave blank for the current matchweek. Add "local" to skip email delivery and GDrive upload.
 ---
 
 # Premier League Team of the Week Builder
 
 Build the TOTW for the specified matchweek (or auto-detect current if not specified).
 
-**Usage**: `/totw [matchweek_number]`
+**Usage**: `/totw [matchweek_number] [local]`
 
 Examples:
-- `/totw 30` — Build TOTW for Matchweek 30
+- `/totw 30` — Build TOTW for Matchweek 30 (full pipeline with email + Drive)
 - `/totw` — Build TOTW for the latest completed matchweek
+- `/totw 30 local` — Build TOTW locally only (no email, no GDrive upload)
+- `/totw local` — Latest matchweek, local only
 
 ## Step 1: Parse the Request
 
-Extract the matchweek number from the user's message:
+Extract the matchweek number and flags from the user's message:
 - Explicit: "matchweek 30", "matchday 20", "MW30", "gameweek 15"
+- **Local flag**: if the word `local` appears anywhere in the arguments, set `LOCAL_MODE=true` and skip Steps 7 and 8.
 - If no matchweek is specified, run:
   ```bash
   python3 scripts/soccerdata_client.py check-status 31
@@ -70,6 +73,8 @@ Read `data/2025-26/matchweek-{N}/fixtures.json` and extract all fixture IDs.
 (e.g. N=10 → 4/3/3; N=9 → 3/3/3; N=8 → 3/3/2)
 
 **3c. Spawn all 3 `researcher-fetcher` agents in a SINGLE message (parallel):**
+
+> If `LOCAL_MODE=true`, skip the GDrive cache check in each agent prompt — add `(local mode — skip GDrive cache check)` to the prompt.
 
 Agent 1 prompt: `Matchweek: {N}. Your fixture IDs: {id1} {id2} {id3} {id4} — run fetch-players-subset and fetch-lineups-subset for these IDs from {PROJECT_ROOT}`
 
@@ -128,6 +133,8 @@ Confirm both `output/matchweek-{N}/presentation.pdf` and `output/matchweek-{N}/p
 
 ## Step 7: Email Delivery Phase
 
+> **Skip this step entirely if `LOCAL_MODE=true`.**
+
 **Execute directly in the main session — do NOT delegate to a subagent.**
 
 **7a.** Generate the email HTML and send via the Python Gmail script:
@@ -140,6 +147,8 @@ The email HTML embeds the diagram as a base64 inline image (~1.5 MB) — always 
 
 ## Step 8: GDrive Upload Phase
 
+> **Skip this step entirely if `LOCAL_MODE=true`.**
+
 **Execute directly in the main session — do NOT delegate to a subagent.**
 
 ```bash
@@ -150,6 +159,19 @@ This single command handles everything: folder creation, 5 file uploads, GSheet 
 
 ## Step 9: Confirmation
 
+**If `LOCAL_MODE=true`:**
+```
+✅ Premier League TOTW — Matchweek {N} Complete! (Local mode)
+
+📊 Team: {Formation} — {list key players briefly}
+🖼️  Diagram:      output/matchweek-{N}/totw_diagram.png
+📑 Presentation: output/matchweek-{N}/presentation.pdf
+📊 PPTX:         output/matchweek-{N}/presentation.pptx
+📧 Email:        skipped (local mode)
+☁️  GDrive:       skipped (local mode)
+```
+
+**If full pipeline:**
 ```
 ✅ Premier League TOTW — Matchweek {N} Complete!
 

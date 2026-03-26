@@ -2,6 +2,8 @@
 
 An automated EPL TOTW system powered by Claude Code. Every matchweek it fetches live match data, picks the best XI using AI analyst agents, generates a pitch diagram, builds a PL-styled presentation, and delivers everything by email with Google Drive storage.
 
+![TOTW Diagram — Matchweek 1](docs/totw_diagram_mw1.png)
+
 ---
 
 ## Features
@@ -22,6 +24,10 @@ An automated EPL TOTW system powered by Claude Code. Every matchweek it fetches 
 - **Pitch diagram PNG** — Playwright renders a Jinja2 HTML template; player cards with team badges, nationality flags, ratings, and formation connector lines
 - **PL-styled presentation** — PDF + PPTX via `python-pptx` + Playwright; includes results slide, formation report (3-column layout with tactical mini-pitch SVG + win-rate bars), 11 player slides with dynamic stats
 - **Dynamic stats display** — each player slide shows only impressive/non-zero stats appropriate to the position (e.g. xG for wingers with no goals, tackles for defenders, not assists)
+
+| Title Slide | Formation Analysis | Player Slide |
+|:-----------:|:-----------------:|:------------:|
+| ![Title slide](docs/slide_title.png) | ![Formation slide](docs/slide_formation.png) | ![Haaland slide](docs/slide_haaland.png) |
 
 ### Delivery & Storage
 - **Gmail delivery** — Python Gmail API (OAuth2); embeds diagram as base64 inline image, attaches PDF
@@ -70,13 +76,18 @@ tests/                         # pytest unit tests
 
 ## Requirements
 
+### Minimum (local-only mode)
 - Python 3.11+
 - Claude Code CLI
+
+### Full pipeline (email + Drive)
 - Google Cloud project with Gmail API + Drive API + Sheets API enabled
 
 ---
 
 ## Setup
+
+> **Just want to try it out?** Steps 1 and 2 are all you need. Use `/totw 30 local` to run the full pipeline locally without any Google account setup.
 
 ### 1. Clone and install dependencies
 
@@ -161,7 +172,16 @@ Token saved to `~/.gmail-mcp/`.
 
 All commands run inside **Claude Code** chat.
 
-### Full pipeline (recommended)
+### Local-only mode (no Google account needed)
+
+Add `local` to any `/totw` or `/research` command to skip email delivery, GDrive upload, and GDrive cache checks. All outputs are saved to `output/matchweek-{N}/`.
+
+```
+/totw 30 local  # Build TOTW for Matchweek 30, save locally only
+/totw local     # Latest completed matchweek, local only
+```
+
+### Full pipeline (email + Drive)
 
 ```
 /totw 30        # Build TOTW for Matchweek 30
@@ -173,12 +193,13 @@ Runs all stages: fetch → analyze → diagram → presentation → email → Dr
 ### Individual stages
 
 ```
-/research 30      # Fetch match data only
-/analyze 30       # Formation + player selection (requires /research)
-/visualize 30     # Generate pitch diagram PNG (requires /analyze)
-/presentation 30  # Build PDF + PPTX (requires /visualize)
-/email 30         # Send email (requires /presentation)
-/gdrive 30        # Upload to Drive + log to GSheet (requires /presentation)
+/research 30 local  # Fetch match data only (skip GDrive cache check)
+/research 30        # Fetch match data (checks GDrive cache first)
+/analyze 30         # Formation + player selection (requires /research)
+/visualize 30       # Generate pitch diagram PNG (requires /analyze)
+/presentation 30    # Build PDF + PPTX (requires /visualize)
+/email 30           # Send email (requires /presentation)
+/gdrive 30          # Upload to Drive + log to GSheet (requires /presentation)
 ```
 
 ### Python scripts directly (terminal)
